@@ -665,16 +665,6 @@ public class ColumnReaderImpl implements ColumnReader {
 
     private long skipDefinitionAndRepetitionLevels(long numSkip) {
         // Skip and count the number of non-zeros in def value ( for null skipping)
-        // Need to check num of valid entries
-//        long numValid = 0;
-//        for (int i = 0; i < numSkip; i++) {
-//            readRepetitionAndDefinitionLevels();
-//            numValid += definitionLevel;
-//        }
-//        return numValid;
-
-//        repetitionLevelColumn.skip(numSkip - 1);
-        // count for optional
         long numValid = numSkip - 1;
         if (this.optionalMode) {
             numValid = definitionLevelColumn.skipWithCount(numSkip - 1);
@@ -689,35 +679,29 @@ public class ColumnReaderImpl implements ColumnReader {
 
     private void checkRead() {
         if (isPageFullyConsumed()) {
-            if (isFullyConsumed()) {
-                if (DEBUG)
-                    LOG.debug("end reached");
-                repetitionLevel = 0; // the next repetition level
-                // Last record, make sure readvalue
-                readValues++;
-                return;
-            }
             readPage();
             // It is possible that all remaining pages can be skipped, need to check again
             if (isFullyConsumed()) {
                 if (DEBUG)
                     LOG.debug("end reached");
-                //System.out.println("end reached");
-                repetitionLevel = 0; // the next repetition level
-                readValues++;
                 return;
             }
         }
 
-        rowFilter.forwardto(readValues);
+        // Move to the next valid position marked by row filter
+        rowFilter.startfrom(readValues);
         if (rowFilter.hasNext()) {
             long nextPos = rowFilter.nextLong();
-            moveTo(nextPos);
+            boolean needMove = nextPos != readValues;
+            readRepetitionAndDefinitionLevels();
+            valueRead = false;
+            if (needMove) {
+                consumeTo(nextPos);
+            }
         } else {
-            readValues = totalValueCount;
+            readValues = totalValueCount + 1;
+            return;
         }
-
-        readRepetitionAndDefinitionLevels();
     }
 
     public long getReadValue() {
@@ -740,6 +724,10 @@ public class ColumnReaderImpl implements ColumnReader {
         if (DEBUG)
             LOG.debug("loading page");
 
+        if (isFullyConsumed()) {
+            readValues++;
+            return;
+        }
         DataPage.Visitor<Boolean> acceptPage = new DataPage.Visitor<Boolean>() {
             @Override
             public Boolean visit(DataPageV1 dataPageV1) {
@@ -774,6 +762,7 @@ public class ColumnReaderImpl implements ColumnReader {
         if (isFullyConsumed()) {
             if (DEBUG)
                 LOG.debug("end reached");
+            readValues++;
             repetitionLevel = 0; // the next repetition level
             return;
         }
@@ -895,14 +884,6 @@ public class ColumnReaderImpl implements ColumnReader {
         valueRead = false;
     }
 
-    /**
-     * The difference between moveTo and consumeTo is that moveTo happens before the readValues are increased.
-     * @param location
-     */
-    protected void moveTo(long location) {
-        consume(location - readValues);
-    }
-
     public void consumeTo(long location) {
         consume(location - readValues + 1);
     }
@@ -914,14 +895,10 @@ public class ColumnReaderImpl implements ColumnReader {
      *
      * @param numConsume
      */
-    public void consume(long numConsume) {
+    protected void consume(long numConsume) {
         if (numConsume == 0) {
             return;
         }
-//        if (numConsume == 1) {
-//            consume();
-//            return;
-//        }
         if (numConsume > totalValueCount - readValues)
             if (DEBUG)
                 LOG.debug("Skip too much, reach the end!");
@@ -931,13 +908,16 @@ public class ColumnReaderImpl implements ColumnReader {
         } else {
             // Crossing page boundary skipping
             // Discard the remaining values in current page
-            readValues = endOfPageValueCount;
             toSkip = numConsume - (endOfPageValueCount - readValues);
+            readValues = endOfPageValueCount;
             // After this call, we are guaranteed to come to a valid page or to the end
-            checkRead();
+            readPage();
             // One value is consumed by the reading new page operation
-            if (!isFullyConsumed())
+            if (!isFullyConsumed()) {
+                readRepetitionAndDefinitionLevels();
+                valueRead = false;
                 internalSkip(toSkip - 1);
+            }
         }
         valueRead = false;
     }

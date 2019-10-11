@@ -5,7 +5,7 @@ public class FullForwardIterator implements ForwardIterator {
     long counter = 0;
 
     @Override
-    public void forwardto(long pos) {
+    public void startfrom(long pos) {
         counter = pos;
     }
 

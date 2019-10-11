@@ -1,5 +1,6 @@
 package org.apache.parquet.column.impl;
 
+import edu.uchicago.cs.db.common.ForwardIterator;
 import edu.uchicago.cs.db.common.FullForwardIterator;
 import edu.uchicago.cs.db.parquet.NonePrimitiveConverter;
 import org.apache.hadoop.conf.Configuration;
@@ -46,6 +47,7 @@ class ColumnReaderImplTest {
             assertEquals(i, values[i], String.valueOf(i));
         }
     }
+
 
     @Test
     void pageSkipRead() throws Exception {
@@ -104,11 +106,106 @@ class ColumnReaderImplTest {
 
     @Test
     void recordSkipRead() throws Exception {
+        Configuration conf = new Configuration();
+        // This is a file containing number from 0 to 49999
+        Footer footer = readFooter("multipage_autoinc.parquet", conf);
 
+        ParquetFileReader fileReader = ParquetFileReader.open(conf, footer.getFile());
+        VersionParser.ParsedVersion version =
+                VersionParser.parse(footer.getParquetMetadata().getFileMetaData().getCreatedBy());
+        PageReadStore rowGroup = fileReader.readNextRowGroup();
+        ColumnDescriptor coldesc = footer.getParquetMetadata()
+                .getFileMetaData().getSchema().getColumns().get(0);
+
+        ForwardIterator rowFilter = new ForwardIterator() {
+
+            long counter = 0;
+
+            @Override
+            public void startfrom(long pos) {
+                counter = pos;
+            }
+
+            @Override
+            public long nextLong() {
+                return ((counter / 13) * 13) + 13;
+            }
+
+            @Override
+            public boolean hasNext() {
+                return true;
+            }
+        };
+
+        ColumnReaderImpl columnReader =
+                new ColumnReaderImpl(coldesc, rowGroup.getPageReader(coldesc),
+                        new NonePrimitiveConverter(), version, stat -> true, rowFilter);
+
+        List<Integer> buffer = new ArrayList<>();
+
+        while (columnReader.getReadValue() <= rowGroup.getRowCount()) {
+            buffer.add(columnReader.getInteger());
+            columnReader.consume();
+        }
+        for (int i = 0; i < buffer.size(); i++) {
+            assertEquals((i + 1) * 13, buffer.get(i));
+        }
     }
 
     @Test
     void doubleFilterRead() throws Exception {
+        Configuration conf = new Configuration();
+        // This is a file containing number from 0 to 49999
+        Footer footer = readFooter("multipage_autoinc.parquet", conf);
 
+        ParquetFileReader fileReader = ParquetFileReader.open(conf, footer.getFile());
+        VersionParser.ParsedVersion version =
+                VersionParser.parse(footer.getParquetMetadata().getFileMetaData().getCreatedBy());
+        PageReadStore rowGroup = fileReader.readNextRowGroup();
+        ColumnDescriptor coldesc = footer.getParquetMetadata()
+                .getFileMetaData().getSchema().getColumns().get(0);
+
+        Predicate<Statistics<?>> pageFilter = new Predicate<Statistics<?>>() {
+            @Override
+            public boolean test(Statistics<?> statistics) {
+                IntStatistics ints = (IntStatistics) statistics;
+                int pageIndex = ints.getMax() / 1250;
+                return pageIndex % 3 == 1;
+            }
+        };
+
+        ForwardIterator rowFilter = new ForwardIterator() {
+
+            long counter = 0;
+
+            @Override
+            public void startfrom(long pos) {
+                counter = pos;
+            }
+
+            @Override
+            public long nextLong() {
+                return ((counter / 11) * 11) + 11;
+            }
+
+            @Override
+            public boolean hasNext() {
+                return true;
+            }
+        };
+
+        ColumnReaderImpl columnReader =
+                new ColumnReaderImpl(coldesc, rowGroup.getPageReader(coldesc),
+                        new NonePrimitiveConverter(), version, pageFilter, rowFilter);
+
+        List<Integer> buffer = new ArrayList<>();
+
+        while (columnReader.getReadValue() <= rowGroup.getRowCount()) {
+            buffer.add(columnReader.getInteger());
+            columnReader.consume();
+        }
+        for (int i = 0; i < buffer.size(); i++) {
+            assertEquals((i + 1) * 16, buffer.get(i));
+        }
     }
 }
