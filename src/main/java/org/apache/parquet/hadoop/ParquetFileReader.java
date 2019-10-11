@@ -488,12 +488,6 @@ public class ParquetFileReader implements Closeable {
         return new ParquetFileReader(conf, file, footer);
     }
 
-    // Parquet default filter interface;
-    public static void setColFilter(PageReadStore ccprs, ColumnDescriptor col, FilterPredicate pred) {
-        ColumnChunkPageReader pageReader = (ColumnChunkPageReader) ccprs.getPageReader(col);
-        pageReader.setFilterPredicate(pred);
-    }
-
     private final CodecFactory codecFactory;
     private final SeekableInputStream f;
     private final FileStatus fileStatus;

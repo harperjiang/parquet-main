@@ -23,6 +23,9 @@ package org.apache.parquet.column.impl;
 
 //import edu.uchicago.cs.encsel.parquet.EncContext;
 
+import com.google.common.base.Predicates;
+import edu.uchicago.cs.db.common.ForwardIterator;
+import edu.uchicago.cs.db.common.FullForwardIterator;
 import it.unimi.dsi.fastutil.ints.IntComparator;
 import it.unimi.dsi.fastutil.ints.IntComparators;
 import org.apache.parquet.CorruptDeltaByteArrays;
@@ -34,6 +37,7 @@ import org.apache.parquet.column.ColumnReader;
 import org.apache.parquet.column.Dictionary;
 import org.apache.parquet.column.Encoding;
 import org.apache.parquet.column.page.*;
+import org.apache.parquet.column.statistics.Statistics;
 import org.apache.parquet.column.values.RequiresPreviousReader;
 import org.apache.parquet.column.values.ValuesReader;
 import org.apache.parquet.column.values.rle.RunLengthBitPackingHybridDecoder;
@@ -48,6 +52,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Comparator;
+import java.util.function.Predicate;
 
 import static java.lang.String.format;
 import static org.apache.parquet.Log.DEBUG;
@@ -162,14 +167,13 @@ public class ColumnReaderImpl implements ColumnReader {
 
     private int pageValueCount = 0;
 
+    private long toSkip = 0;
+
+    private Predicate<Statistics<?>> pageFilter;
     /**
-     * Number of pages has been skipped
+     * Marks the valid row position
      */
-    private int pageSkipped = 0;
-    /**
-     * Number of records skipped in PageReader
-     */
-    private long skippedInPageReader = 0;
+    private ForwardIterator rowFilter;
 
     private final PrimitiveConverter converter;
     private Binding binding;
@@ -177,8 +181,6 @@ public class ColumnReaderImpl implements ColumnReader {
     // this is needed because we will attempt to read the value twice when filtering
     // TODO: rework that
     private boolean valueRead;
-    private boolean globalDict = false;
-    private int targerID = -2;
 
     private void bindToDictionary(final Dictionary dictionary) {
         binding =
@@ -424,17 +426,15 @@ public class ColumnReaderImpl implements ColumnReader {
         });
     }
 
-    /**
-     * creates a reader for triplets
-     *
-     * @param path       the descriptor for the corresponding column
-     * @param pageReader the underlying store to read from
-     */
-    public ColumnReaderImpl(ColumnDescriptor path, PageReader pageReader, PrimitiveConverter converter, ParsedVersion writerVersion) {
+    public ColumnReaderImpl(ColumnDescriptor path, PageReader pageReader, PrimitiveConverter converter,
+                            ParsedVersion writerVersion, Predicate<Statistics<?>> pageFilter, ForwardIterator rowFilter) {
         this.path = checkNotNull(path, "path");
         this.pageReader = checkNotNull(pageReader, "pageReader");
         this.converter = checkNotNull(converter, "converter");
         this.writerVersion = writerVersion;
+        this.pageFilter = pageFilter;
+        this.rowFilter = rowFilter;
+
         DictionaryPage dictionaryPage = null;
         dictionaryPage = pageReader.readDictionaryPage();
 
@@ -458,51 +458,14 @@ public class ColumnReaderImpl implements ColumnReader {
     }
 
     /**
-     * Use Arrays.binarySearch to return the expected position when not found
+     * creates a reader for triplets
      *
-     * @param key
-     * @return
+     * @param path       the descriptor for the corresponding column
+     * @param pageReader the underlying store to read from
      */
-    public int getDictId(Binary key, Comparator<Binary> comparator) {
-        if (null == comparator) {
-            comparator = Comparator.naturalOrder();
-        }
-        int low = 0;
-        int high = dictionary.getMaxId();
-
-        while (low <= high) {
-            int mid = (low + high) >>> 1;
-            Binary midVal = dictionary.decodeToBinary(mid);
-
-            if (comparator.compare(midVal, key) < 0)
-                low = mid + 1;
-            else if (comparator.compare(midVal, key) > 0)
-                high = mid - 1;
-            else
-                return mid; // key found
-        }
-        return -(low + 1);  // key not found.
-    }
-
-    public int getDictId(int key, IntComparator comparator) {
-        if (null == comparator) {
-            comparator = IntComparators.NATURAL_COMPARATOR;
-        }
-        int low = 0;
-        int high = dictionary.getMaxId();
-
-        while (low <= high) {
-            int mid = (low + high) >>> 1;
-            int midVal = dictionary.decodeToInt(mid);
-
-            if (comparator.compare(midVal, key) < 0)
-                low = mid + 1;
-            else if (comparator.compare(midVal, key) > 0)
-                high = mid - 1;
-            else
-                return mid; // key found
-        }
-        return -(low + 1);  // key not found.
+    public ColumnReaderImpl(ColumnDescriptor path, PageReader pageReader, PrimitiveConverter converter,
+                            ParsedVersion writerVersion) {
+        this(path, pageReader, converter, writerVersion, stat -> true, new FullForwardIterator());
     }
 
     public Dictionary getDictionary() {
@@ -735,6 +698,7 @@ public class ColumnReaderImpl implements ColumnReader {
                 return;
             }
             readPage();
+            // It is possible that all remaining pages can be skipped, need to check again
             if (isFullyConsumed()) {
                 if (DEBUG)
                     LOG.debug("end reached");
@@ -744,6 +708,15 @@ public class ColumnReaderImpl implements ColumnReader {
                 return;
             }
         }
+
+        rowFilter.forwardto(readValues);
+        if (rowFilter.hasNext()) {
+            long nextPos = rowFilter.nextLong();
+            moveTo(nextPos);
+        } else {
+            readValues = totalValueCount;
+        }
+
         readRepetitionAndDefinitionLevels();
     }
 
@@ -759,32 +732,52 @@ public class ColumnReaderImpl implements ColumnReader {
         return this.pageValueCount;
     }
 
-    public int getPageSkipped() {
-        return this.pageSkipped;
-    }
-
-    public void setSkippedInPageReader(long skippedInPageReader) {
-        this.skippedInPageReader = skippedInPageReader;
-    }
-
+    /**
+     * This method looks for the next valid page satisfying both page filter and row filter.
+     * After it returns, the toSkip property will be updated to reflect the next number to read.
+     */
     private void readPage() {
         if (DEBUG)
             LOG.debug("loading page");
+
+        DataPage.Visitor<Boolean> acceptPage = new DataPage.Visitor<Boolean>() {
+            @Override
+            public Boolean visit(DataPageV1 dataPageV1) {
+                return pageFilter.test(dataPageV1.getStatistics());
+            }
+
+            @Override
+            public Boolean visit(DataPageV2 dataPageV2) {
+                return pageFilter.test(dataPageV2.getStatistics());
+            }
+        };
+        // If the page fails filter test, skip it
+        // If the page is not included in the row filter, skip it
+
+        // First use the toSkip to consume pages
         DataPage page = pageReader.readPage();
-        // This value is the number of records in skipped pages
-        skippedInPageReader = pageReader.checkSkipped();
-        if (skippedInPageReader != 0) {
-            // FIXME This counter is inaccurate as multiple pages can be skipped
-            this.pageSkipped++;
+
+        while (page != null && toSkip >= page.getValueCount()) {
+            this.readValues += page.getValueCount();
+            this.endOfPageValueCount += page.getValueCount();
+            toSkip -= page.getValueCount();
+            page = pageReader.readPage();
         }
-        this.readValues += skippedInPageReader;
-        this.endOfPageValueCount += skippedInPageReader;
+        // Check pageFilter for next valid page
+        while (page != null && !page.accept(acceptPage)) {
+            toSkip = 0;
+            this.readValues += page.getValueCount();
+            this.endOfPageValueCount += page.getValueCount();
+            page = pageReader.readPage();
+        }
+
         if (isFullyConsumed()) {
             if (DEBUG)
                 LOG.debug("end reached");
             repetitionLevel = 0; // the next repetition level
             return;
         }
+
         page.accept(new DataPage.Visitor<Void>() {
             @Override
             public Void visit(DataPageV1 dataPageV1) {
@@ -902,6 +895,14 @@ public class ColumnReaderImpl implements ColumnReader {
         valueRead = false;
     }
 
+    /**
+     * The difference between moveTo and consumeTo is that moveTo happens before the readValues are increased.
+     * @param location
+     */
+    protected void moveTo(long location) {
+        consume(location - readValues);
+    }
+
     public void consumeTo(long location) {
         consume(location - readValues + 1);
     }
@@ -929,15 +930,14 @@ public class ColumnReaderImpl implements ColumnReader {
             internalSkip(numConsume);
         } else {
             // Crossing page boundary skipping
-            long toSkip = numConsume - (endOfPageValueCount - readValues);
             // Discard the remaining values in current page
-            this.readValues = endOfPageValueCount;
-            pageReader.setToSkip(toSkip);
-            consume();
-            toSkip -= skippedInPageReader;
-            pageReader.setToSkip(0);
+            readValues = endOfPageValueCount;
+            toSkip = numConsume - (endOfPageValueCount - readValues);
+            // After this call, we are guaranteed to come to a valid page or to the end
+            checkRead();
             // One value is consumed by the reading new page operation
-            internalSkip(toSkip - 1);
+            if (!isFullyConsumed())
+                internalSkip(toSkip - 1);
         }
         valueRead = false;
     }

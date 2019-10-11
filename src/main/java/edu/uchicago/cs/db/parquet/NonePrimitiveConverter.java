@@ -14,42 +14,48 @@
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
  * KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations
- * under the License,
+ * under the License.
  *
  * Contributors:
  *     Hao Jiang - initial API and implementation
  */
-package org.apache.parquet.column.page;
 
-/**
- * Reader for a sequence a page from a given column chunk
- *
- * @author Julien Le Dem
- *
- */
-public interface PageReader {
+package edu.uchicago.cs.db.parquet;
 
- /**
-  * @return the dictionary page in that chunk or null if none
-  */
-  DictionaryPage readDictionaryPage();
+import org.apache.parquet.column.Dictionary;
+import org.apache.parquet.io.api.Binary;
+import org.apache.parquet.io.api.PrimitiveConverter;
 
-  /**
-   * @return the total number of values in the column chunk
-   */
-  long getTotalValueCount();
+public class NonePrimitiveConverter extends PrimitiveConverter {
 
-  /**
-   * @return the next page in that chunk or null if after the last page
-   */
-  DataPage readPage();
-  
-  /**
-   * @author chunwei
-   * @return number of rows skipped
-   */
-  long checkSkipped();
+    public static NonePrimitiveConverter INSTANCE = new NonePrimitiveConverter();
 
-  void setToSkip(long skip);
+    private Dictionary dictionary;
 
+    public NonePrimitiveConverter() {
+    }
+
+    @Override
+    public void addBinary(Binary value) {
+    }
+
+    @Override
+    public void addBoolean(boolean value) {
+    }
+
+    @Override
+    public void addDouble(double value) {
+    }
+
+    @Override
+    public void addFloat(float value) {
+    }
+
+    @Override
+    public void addInt(int value) {
+    }
+
+    @Override
+    public void addLong(long value) {
+    }
 }
