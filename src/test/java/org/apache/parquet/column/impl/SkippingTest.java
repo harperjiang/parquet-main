@@ -100,19 +100,31 @@ public class SkippingTest {
             columnReader.consume();
         }
 
-        fileReader = ParquetFileReader.open(conf, footer.getFile());
-        rowGroup = fileReader.readNextRowGroup();
+//        fileReader = ParquetFileReader.open(conf, footer.getFile());
+//        rowGroup = fileReader.readNextRowGroup();
+//
+//        columnReader = new ColumnReaderImpl(coldesc, rowGroup.getPageReader(coldesc),
+//                new NonePrimitiveConverter(), version);
+//
+//        columnReader.consumeTo(103);
+//        assertEquals(103, columnReader.getInteger());
+//        columnReader.consumeTo(103);
+//        assertEquals(103, columnReader.getInteger());
+//
+        for (int i = 0; i < 1000; i++) {
+            fileReader = ParquetFileReader.open(conf, footer.getFile());
+            rowGroup = fileReader.readNextRowGroup();
 
-        columnReader = new ColumnReaderImpl(coldesc, rowGroup.getPageReader(coldesc),
-                new NonePrimitiveConverter(), version);
+            columnReader = new ColumnReaderImpl(coldesc, rowGroup.getPageReader(coldesc),
+                    new NonePrimitiveConverter(), version);
 
-        Random rand = new Random(System.currentTimeMillis());
-        int counter = Math.abs(rand.nextInt() % 350);
-        while (counter < values.length) {
-            columnReader.consumeTo(counter);
-//            System.out.println(counter);
-            assertEquals(values[counter], columnReader.getInteger());
-            counter += Math.abs(rand.nextInt() % 350 + 1);
+            Random rand = new Random(System.currentTimeMillis());
+            int counter = Math.abs(rand.nextInt() % 350);
+            while (counter < values.length) {
+                columnReader.consumeTo(counter);
+                assertEquals(values[counter], columnReader.getInteger());
+                counter += Math.abs(rand.nextInt() % 350 + 1);
+            }
         }
     }
 
@@ -138,19 +150,21 @@ public class SkippingTest {
             columnReader.consume();
         }
 
-        fileReader = ParquetFileReader.open(conf, footer.getFile());
-        rowGroup = fileReader.readNextRowGroup();
+        for (int i = 0; i < 1000; i++) {
+            fileReader = ParquetFileReader.open(conf, footer.getFile());
+            rowGroup = fileReader.readNextRowGroup();
 
-        columnReader = new ColumnReaderImpl(coldesc, rowGroup.getPageReader(coldesc),
-                new NonePrimitiveConverter(), version);
+            columnReader = new ColumnReaderImpl(coldesc, rowGroup.getPageReader(coldesc),
+                    new NonePrimitiveConverter(), version);
 
-        Random rand = new Random(System.currentTimeMillis());
-        int counter = Math.abs(rand.nextInt() % 350);
-        while (counter < values.length) {
-            columnReader.consumeTo(counter);
+            Random rand = new Random(System.currentTimeMillis());
+            int counter = Math.abs(rand.nextInt() % 350);
+            while (counter < values.length) {
+                columnReader.consumeTo(counter);
 //            System.out.println(counter);
-            assertEquals(values[counter], columnReader.getInteger());
-            counter += Math.abs(rand.nextInt() % 350 + 1);
+                assertEquals(values[counter], columnReader.getInteger());
+                counter += Math.abs(rand.nextInt() % 350 + 1);
+            }
         }
     }
 
@@ -175,20 +189,21 @@ public class SkippingTest {
             values[i] = columnReader.getInteger();
             columnReader.consume();
         }
+        for (int i = 0; i < 1000; i++) {
+            fileReader = ParquetFileReader.open(conf, footer.getFile());
+            rowGroup = fileReader.readNextRowGroup();
 
-        fileReader = ParquetFileReader.open(conf, footer.getFile());
-        rowGroup = fileReader.readNextRowGroup();
+            columnReader = new ColumnReaderImpl(coldesc, rowGroup.getPageReader(coldesc),
+                    new NonePrimitiveConverter(), version);
 
-        columnReader = new ColumnReaderImpl(coldesc, rowGroup.getPageReader(coldesc),
-                new NonePrimitiveConverter(), version);
-
-        Random rand = new Random(System.currentTimeMillis());
-        int counter = Math.abs(rand.nextInt() % 350);
-        while (counter < values.length) {
-            columnReader.consumeTo(counter);
+            Random rand = new Random(System.currentTimeMillis());
+            int counter = Math.abs(rand.nextInt() % 350);
+            while (counter < values.length) {
+                columnReader.consumeTo(counter);
 //            System.out.println(counter);
-            assertEquals(values[counter], columnReader.getInteger());
-            counter += Math.abs(rand.nextInt() % 350 + 1);
+                assertEquals(values[counter], columnReader.getInteger());
+                counter += Math.abs(rand.nextInt() % 350 + 1);
+            }
         }
     }
 

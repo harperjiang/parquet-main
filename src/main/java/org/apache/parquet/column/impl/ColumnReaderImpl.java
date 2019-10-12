@@ -163,7 +163,10 @@ public class ColumnReaderImpl implements ColumnReader {
     private int dictionaryId;
 
     private long endOfPageValueCount;
+
     private long readValues = 0;
+    private long validValues = 0;
+    private long readDatas = 0;
 
     private int pageValueCount = 0;
 
@@ -586,6 +589,7 @@ public class ColumnReaderImpl implements ColumnReader {
         try {
             if (!valueRead) {
                 binding.read();
+                readDatas++;
                 valueRead = true;
             }
         } catch (RuntimeException e) {
@@ -624,19 +628,9 @@ public class ColumnReaderImpl implements ColumnReader {
     public void skip() {
         if (!valueRead) {
             binding.skip();
+            readDatas++;
             valueRead = true;
         }
-    }
-
-    protected void consumeInPage(long numConsume) {
-        if (0 == numConsume) {
-            return;
-        }
-        boolean currentValid = getCurrentDefinitionLevel() == getDescriptor().getMaxDefinitionLevel();
-        long numValid = skipDefinitionAndRepetitionLevels(numConsume - 1) + (currentValid ? 1 : 0);
-        if (numValid > 0)
-            binding.skip(numValid);
-        readRepetitionAndDefinitionLevels();
     }
 
 
@@ -655,6 +649,7 @@ public class ColumnReaderImpl implements ColumnReader {
 //        repetitionLevel = repetitionLevelColumn.nextInt();
         if (this.optionalMode)
             definitionLevel = definitionLevelColumn.nextInt();
+        validValues += (definitionLevel == getDescriptor().getMaxDefinitionLevel()) ? 1 : 0;
         ++readValues;
     }
 
@@ -667,6 +662,7 @@ public class ColumnReaderImpl implements ColumnReader {
             definitionLevelColumn.skip(numSkip);
         }
         readValues += numSkip;
+        validValues += numValid;
         return numValid;
     }
 
@@ -681,19 +677,26 @@ public class ColumnReaderImpl implements ColumnReader {
             }
         }
 
-        readRepetitionAndDefinitionLevels();
-        valueRead = false;
         // Move to the next valid position marked by row filter
-        long currentPos = readValues - 1;
-        rowFilter.startfrom(currentPos);
-        if (rowFilter.hasNext()) {
-            long nextPos = rowFilter.nextLong();
-            if (nextPos != currentPos) {
-                consumeTo(nextPos);
-            }
+        if (toSkip > 0) {
+            consumeTo(readValues + toSkip);
+            toSkip = 0;
         } else {
-            readValues = totalValueCount + 1;
-            return;
+            long currentPos = readValues;
+            rowFilter.startfrom(currentPos);
+            if (rowFilter.hasNext()) {
+                long nextPos = rowFilter.nextLong();
+                if (nextPos != currentPos) {
+                    consumeTo(nextPos);
+                } else {
+                    // Simply read the current value
+                    readRepetitionAndDefinitionLevels();
+                    valueRead = false;
+                }
+            } else {
+                readValues = totalValueCount + 1;
+                return;
+            }
         }
     }
 
@@ -740,6 +743,8 @@ public class ColumnReaderImpl implements ColumnReader {
 
         while (page != null && toSkip >= page.getValueCount()) {
             this.readValues += page.getValueCount();
+            this.validValues = this.readValues;
+            this.readDatas = this.readValues;
             this.endOfPageValueCount += page.getValueCount();
             toSkip -= page.getValueCount();
             page = pageReader.readPage();
@@ -749,6 +754,8 @@ public class ColumnReaderImpl implements ColumnReader {
             // Need recompute
             toSkip = -1;
             this.readValues += page.getValueCount();
+            this.validValues = this.readValues;
+            this.readDatas = this.readValues;
             this.endOfPageValueCount += page.getValueCount();
             page = pageReader.readPage();
         }
@@ -882,36 +889,40 @@ public class ColumnReaderImpl implements ColumnReader {
     }
 
     public void consumeTo(long location) {
-        consume(location - readValues + 1);
-    }
-
-    /**
-     * Consume given number of records,
-     * consume(1) = consume()
-     * consume(2) = consume() read() consume()
-     *
-     * @param numConsume
-     */
-    protected void consume(long numConsume) {
-        if (numConsume == 0) {
+        if (location <= readValues - 1) {
             return;
         }
-        long consumedCount = readValues - 1;
-        if (numConsume > totalValueCount - consumedCount)
+        if (location >= totalValueCount)
             if (DEBUG)
                 LOG.debug("Skip too much, reach the end!");
-        if (numConsume < endOfPageValueCount - consumedCount) {
+        if (location < endOfPageValueCount) {
             // Enough records left in current page
-            consumeInPage(numConsume);
+            consumeInPage(location - readValues + 1);
         } else {
             // Crossing page boundary skipping
             // Discard the remaining values in current page
-            toSkip = numConsume - (endOfPageValueCount - consumedCount);
+            toSkip = location - endOfPageValueCount;
             readValues = endOfPageValueCount;
+            // When a new page is read, these values are reset
+            validValues = readValues;
+            readDatas = readValues;
             // After this call, we are guaranteed to come to a valid page or to the end
             checkRead();
         }
         valueRead = false;
+    }
+
+    protected void consumeInPage(long numConsume) {
+        if (0 == numConsume) {
+            return;
+        }
+        long numValid = skipDefinitionAndRepetitionLevels(numConsume - 1);
+
+        if (validValues > readDatas) {
+            binding.skip(validValues - readDatas);
+            readDatas = validValues;
+        }
+        readRepetitionAndDefinitionLevels();
     }
 
     /**
