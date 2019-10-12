@@ -128,7 +128,9 @@ class ColumnReaderImplTest {
 
             @Override
             public long nextLong() {
-                return ((counter / 13) * 13) + 13;
+                if (counter / 13 * 13 == counter)
+                    return counter;
+                return (counter / 13) * 13 + 13;
             }
 
             @Override
@@ -148,7 +150,7 @@ class ColumnReaderImplTest {
             columnReader.consume();
         }
         for (int i = 0; i < buffer.size(); i++) {
-            assertEquals((i + 1) * 13, buffer.get(i));
+            assertEquals(i  * 13, buffer.get(i));
         }
     }
 
@@ -165,6 +167,11 @@ class ColumnReaderImplTest {
         ColumnDescriptor coldesc = footer.getParquetMetadata()
                 .getFileMetaData().getSchema().getColumns().get(0);
 
+        ParquetFileReader fileReader2 = ParquetFileReader.open(conf, footer.getFile());
+        PageReadStore rowGroup2 = fileReader2.readNextRowGroup();
+        PageReader reader = rowGroup2.getPageReader(coldesc);
+
+
         Predicate<Statistics<?>> pageFilter = new Predicate<Statistics<?>>() {
             @Override
             public boolean test(Statistics<?> statistics) {
@@ -173,6 +180,23 @@ class ColumnReaderImplTest {
                 return pageIndex % 3 == 1;
             }
         };
+
+        List<DataPage> pages = new ArrayList<>();
+        DataPage dp = null;
+        while ((dp = reader.readPage()) != null) {
+            if (dp.accept(new DataPage.Visitor<Boolean>() {
+                @Override
+                public Boolean visit(DataPageV1 dataPageV1) {
+                    return pageFilter.test(dataPageV1.getStatistics());
+                }
+
+                @Override
+                public Boolean visit(DataPageV2 dataPageV2) {
+                    return pageFilter.test(dataPageV2.getStatistics());
+                }
+            }))
+                pages.add(dp);
+        }
 
         ForwardIterator rowFilter = new ForwardIterator() {
 
@@ -204,8 +228,44 @@ class ColumnReaderImplTest {
             buffer.add(columnReader.getInteger());
             columnReader.consume();
         }
+
+        List<Integer> expect = new ArrayList<>();
+
+        for (DataPage page : pages) {
+            page.accept(new DataPage.Visitor<Object>() {
+                @Override
+                public Object visit(DataPageV2 dataPageV2) {
+                    IntStatistics ints = (IntStatistics) dataPageV2.getStatistics();
+                    for (int i = ints.getMin(); i <= ints.getMax(); i++) {
+                        if (i / 11 * 11 == i) {
+                            expect.add(i);
+                        }
+                    }
+
+                    return null;
+                }
+
+                @Override
+                public Object visit(DataPageV1 dataPageV1) {
+                    IntStatistics ints = (IntStatistics) dataPageV1.getStatistics();
+                    for (int i = ints.getMin(); i <= ints.getMax(); i++) {
+                        if (i / 11 * 11 == i) {
+                            expect.add(i);
+                        }
+                    }
+
+                    return null;
+                }
+            });
+        }
+        expect.remove(0);
+        expect.remove(new Integer(41283));
+
+
+        assertEquals(expect.size(), buffer.size());
+
         for (int i = 0; i < buffer.size(); i++) {
-            assertEquals((i + 1) * 16, buffer.get(i));
+            assertEquals(expect.get(i), buffer.get(i));
         }
     }
 }
