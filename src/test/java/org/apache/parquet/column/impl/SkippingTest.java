@@ -51,8 +51,8 @@ public class SkippingTest {
         ColumnDescriptor coldesc = footer.getParquetMetadata()
                 .getFileMetaData().getSchema().getColumns().get(2);
 
-        ColumnReaderImpl columnReader =
-                new ColumnReaderImpl(coldesc, rowGroup.getPageReader(coldesc),
+        SkippingColumnReaderImpl columnReader =
+                new SkippingColumnReaderImpl(coldesc, rowGroup.getPageReader(coldesc),
                         new NonePrimitiveConverter(), version);
         int[] values = new int[(int) rowGroup.getRowCount()];
 
@@ -64,7 +64,7 @@ public class SkippingTest {
         fileReader = ParquetFileReader.open(conf, footer.getFile());
         rowGroup = fileReader.readNextRowGroup();
 
-        columnReader = new ColumnReaderImpl(coldesc, rowGroup.getPageReader(coldesc),
+        columnReader = new SkippingColumnReaderImpl(coldesc, rowGroup.getPageReader(coldesc),
                 new NonePrimitiveConverter(), version);
 
         columnReader.consumeTo(5);
@@ -90,8 +90,8 @@ public class SkippingTest {
         ColumnDescriptor coldesc = footer.getParquetMetadata()
                 .getFileMetaData().getSchema().getColumns().get(0);
 
-        ColumnReaderImpl columnReader =
-                new ColumnReaderImpl(coldesc, rowGroup.getPageReader(coldesc),
+        SkippingColumnReaderImpl columnReader =
+                new SkippingColumnReaderImpl(coldesc, rowGroup.getPageReader(coldesc),
                         new NonePrimitiveConverter(), version);
         int[] values = new int[(int) rowGroup.getRowCount()];
 
@@ -115,7 +115,7 @@ public class SkippingTest {
             fileReader = ParquetFileReader.open(conf, footer.getFile());
             rowGroup = fileReader.readNextRowGroup();
 
-            columnReader = new ColumnReaderImpl(coldesc, rowGroup.getPageReader(coldesc),
+            columnReader = new SkippingColumnReaderImpl(coldesc, rowGroup.getPageReader(coldesc),
                     new NonePrimitiveConverter(), version);
 
             Random rand = new Random(System.currentTimeMillis());
@@ -140,8 +140,8 @@ public class SkippingTest {
         ColumnDescriptor coldesc = footer.getParquetMetadata()
                 .getFileMetaData().getSchema().getColumns().get(0);
 
-        ColumnReaderImpl columnReader =
-                new ColumnReaderImpl(coldesc, rowGroup.getPageReader(coldesc),
+        SkippingColumnReaderImpl columnReader =
+                new SkippingColumnReaderImpl(coldesc, rowGroup.getPageReader(coldesc),
                         new NonePrimitiveConverter(), version);
         int[] values = new int[(int) rowGroup.getRowCount()];
 
@@ -154,7 +154,7 @@ public class SkippingTest {
             fileReader = ParquetFileReader.open(conf, footer.getFile());
             rowGroup = fileReader.readNextRowGroup();
 
-            columnReader = new ColumnReaderImpl(coldesc, rowGroup.getPageReader(coldesc),
+            columnReader = new SkippingColumnReaderImpl(coldesc, rowGroup.getPageReader(coldesc),
                     new NonePrimitiveConverter(), version);
 
             Random rand = new Random(System.currentTimeMillis());
@@ -180,8 +180,8 @@ public class SkippingTest {
         ColumnDescriptor coldesc = footer.getParquetMetadata()
                 .getFileMetaData().getSchema().getColumns().get(0);
 
-        ColumnReaderImpl columnReader =
-                new ColumnReaderImpl(coldesc, rowGroup.getPageReader(coldesc),
+        SkippingColumnReaderImpl columnReader =
+                new SkippingColumnReaderImpl(coldesc, rowGroup.getPageReader(coldesc),
                         new NonePrimitiveConverter(), version);
         int[] values = new int[(int) rowGroup.getRowCount()];
 
@@ -193,7 +193,7 @@ public class SkippingTest {
             fileReader = ParquetFileReader.open(conf, footer.getFile());
             rowGroup = fileReader.readNextRowGroup();
 
-            columnReader = new ColumnReaderImpl(coldesc, rowGroup.getPageReader(coldesc),
+            columnReader = new SkippingColumnReaderImpl(coldesc, rowGroup.getPageReader(coldesc),
                     new NonePrimitiveConverter(), version);
 
             Random rand = new Random(System.currentTimeMillis());
@@ -219,7 +219,7 @@ public class SkippingTest {
 
         MessageType schema = footer.getParquetMetadata().getFileMetaData().getSchema();
         ColumnDescriptor coldesc = schema.getColumns().get(0);
-        ColumnReaderImpl reader = new ColumnReaderImpl(coldesc,
+        SkippingColumnReaderImpl reader = new SkippingColumnReaderImpl(coldesc,
                 rowGroup.getPageReader(coldesc), new NonePrimitiveConverter(), version);
 
         Integer[] values = new Integer[(int) reader.getTotalValueCount()];
@@ -235,7 +235,7 @@ public class SkippingTest {
         for (int round = 0; round < 1000; round++) {
             fileReader = ParquetFileReader.open(conf, footer.getFile());
             rowGroup = fileReader.readNextRowGroup();
-            reader = new ColumnReaderImpl(coldesc,
+            reader = new SkippingColumnReaderImpl(coldesc,
                     rowGroup.getPageReader(coldesc), new NonePrimitiveConverter(), version);
 
             Random rand = new Random(System.currentTimeMillis());
@@ -263,7 +263,7 @@ public class SkippingTest {
 
         MessageType schema = footer.getParquetMetadata().getFileMetaData().getSchema();
         ColumnDescriptor coldesc = schema.getColumns().get(0);
-        ColumnReaderImpl reader = new ColumnReaderImpl(coldesc,
+        SkippingColumnReaderImpl reader = new SkippingColumnReaderImpl(coldesc,
                 rowGroup.getPageReader(coldesc), new NonePrimitiveConverter(), version);
 
         Integer[] values = new Integer[(int) reader.getTotalValueCount()];
@@ -278,7 +278,7 @@ public class SkippingTest {
 
         fileReader = ParquetFileReader.open(conf, footer.getFile());
         rowGroup = fileReader.readNextRowGroup();
-        reader = new ColumnReaderImpl(coldesc,
+        reader = new SkippingColumnReaderImpl(coldesc,
                 rowGroup.getPageReader(coldesc), new NonePrimitiveConverter(), version);
 
 

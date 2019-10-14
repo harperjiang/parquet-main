@@ -1,8 +1,14 @@
-package edu.uchicago.cs.db.common;
+package org.apache.parquet.column.impl;
 
 public class FullForwardIterator implements ForwardIterator {
 
     long counter = 0;
+
+    long limit = 0;
+
+    public FullForwardIterator(long limit) {
+        this.limit = limit;
+    }
 
     @Override
     public void startfrom(long pos) {
@@ -16,6 +22,6 @@ public class FullForwardIterator implements ForwardIterator {
 
     @Override
     public boolean hasNext() {
-        return true;
+        return counter < limit;
     }
 }

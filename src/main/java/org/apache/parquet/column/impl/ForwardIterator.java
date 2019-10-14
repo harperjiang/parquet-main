@@ -1,4 +1,4 @@
-package edu.uchicago.cs.db.common;
+package org.apache.parquet.column.impl;
 
 import it.unimi.dsi.fastutil.longs.LongIterator;
 

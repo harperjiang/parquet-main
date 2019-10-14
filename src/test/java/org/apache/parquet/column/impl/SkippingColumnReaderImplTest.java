@@ -1,7 +1,5 @@
 package org.apache.parquet.column.impl;
 
-import edu.uchicago.cs.db.common.ForwardIterator;
-import edu.uchicago.cs.db.common.FullForwardIterator;
 import edu.uchicago.cs.db.parquet.NonePrimitiveConverter;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.VersionParser;
@@ -20,7 +18,7 @@ import java.util.function.Predicate;
 import static org.apache.parquet.TestUtils.readFooter;
 import static org.junit.jupiter.api.Assertions.*;
 
-class ColumnReaderImplTest {
+class SkippingColumnReaderImplTest {
 
     @Test
     void normalRead() throws Exception {
@@ -35,13 +33,13 @@ class ColumnReaderImplTest {
         ColumnDescriptor coldesc = footer.getParquetMetadata()
                 .getFileMetaData().getSchema().getColumns().get(0);
 
-        ColumnReaderImpl columnReader =
-                new ColumnReaderImpl(coldesc, rowGroup.getPageReader(coldesc),
+        SkippingColumnReaderImpl columnReader =
+                new SkippingColumnReaderImpl(coldesc, rowGroup.getPageReader(coldesc),
                         new NonePrimitiveConverter(), version);
         int[] values = new int[(int) rowGroup.getRowCount()];
 
         for (int i = 0; i < values.length; i++) {
-            assertEquals(i + 1, columnReader.getReadValue());
+            assertEquals(i + 1, columnReader.getReadValues());
             values[i] = columnReader.getInteger();
             columnReader.consume();
             assertEquals(i, values[i], String.valueOf(i));
@@ -68,13 +66,13 @@ class ColumnReaderImplTest {
             return intstat.getMin() == 0 || intstat.getMin() > 5000;
         };
 
-        ColumnReaderImpl columnReader =
-                new ColumnReaderImpl(coldesc, rowGroup.getPageReader(coldesc),
-                        new NonePrimitiveConverter(), version, pageFilter, new FullForwardIterator());
+        SkippingColumnReaderImpl columnReader =
+                new SkippingColumnReaderImpl(coldesc, rowGroup.getPageReader(coldesc),
+                        new NonePrimitiveConverter(), version, pageFilter, null);
 
         List<Integer> buffer = new ArrayList<>();
 
-        while (columnReader.getReadValue() <= rowGroup.getRowCount()) {
+        while (columnReader.getReadValues() <= rowGroup.getRowCount()) {
             buffer.add(columnReader.getInteger());
             columnReader.consume();
         }
@@ -139,18 +137,18 @@ class ColumnReaderImplTest {
             }
         };
 
-        ColumnReaderImpl columnReader =
-                new ColumnReaderImpl(coldesc, rowGroup.getPageReader(coldesc),
+        SkippingColumnReaderImpl columnReader =
+                new SkippingColumnReaderImpl(coldesc, rowGroup.getPageReader(coldesc),
                         new NonePrimitiveConverter(), version, stat -> true, rowFilter);
 
         List<Integer> buffer = new ArrayList<>();
 
-        while (columnReader.getReadValue() <= rowGroup.getRowCount()) {
+        while (columnReader.getReadValues() <= rowGroup.getRowCount()) {
             buffer.add(columnReader.getInteger());
             columnReader.consume();
         }
         for (int i = 0; i < buffer.size(); i++) {
-            assertEquals(i  * 13, buffer.get(i));
+            assertEquals(i * 13, buffer.get(i));
         }
     }
 
@@ -218,13 +216,13 @@ class ColumnReaderImplTest {
             }
         };
 
-        ColumnReaderImpl columnReader =
-                new ColumnReaderImpl(coldesc, rowGroup.getPageReader(coldesc),
+        SkippingColumnReaderImpl columnReader =
+                new SkippingColumnReaderImpl(coldesc, rowGroup.getPageReader(coldesc),
                         new NonePrimitiveConverter(), version, pageFilter, rowFilter);
 
         List<Integer> buffer = new ArrayList<>();
 
-        while (columnReader.getReadValue() <= rowGroup.getRowCount()) {
+        while (columnReader.getReadValues() <= rowGroup.getRowCount()) {
             buffer.add(columnReader.getInteger());
             columnReader.consume();
         }

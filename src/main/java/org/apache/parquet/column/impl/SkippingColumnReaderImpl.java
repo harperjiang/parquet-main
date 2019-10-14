@@ -1,36 +1,29 @@
 /*
  * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
+ * or more contributor license agreements. See the NOTICE file
  * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
+ * regarding copyright ownership. The ASF licenses this file
  * to you under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
+ * with the License. You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing,
  * software distributed under the License is distributed on an
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
+ * KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations
- * under the License.
+ * under the License,
+ *
+ * Contributors:
+ *     Hao Jiang - initial API and implementation
  */
 package org.apache.parquet.column.impl;
 
-import static java.lang.String.format;
-import static org.apache.parquet.Log.DEBUG;
-import static org.apache.parquet.Preconditions.checkNotNull;
-import static org.apache.parquet.column.ValuesType.DEFINITION_LEVEL;
-import static org.apache.parquet.column.ValuesType.REPETITION_LEVEL;
-import static org.apache.parquet.column.ValuesType.VALUES;
-
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
-import java.nio.ByteBuffer;
+//import edu.uchicago.cs.encsel.parquet.EncContext;
 
 import org.apache.parquet.CorruptDeltaByteArrays;
-import org.apache.parquet.Log;
 import org.apache.parquet.VersionParser.ParsedVersion;
 import org.apache.parquet.bytes.BytesInput;
 import org.apache.parquet.bytes.BytesUtils;
@@ -38,11 +31,8 @@ import org.apache.parquet.column.ColumnDescriptor;
 import org.apache.parquet.column.ColumnReader;
 import org.apache.parquet.column.Dictionary;
 import org.apache.parquet.column.Encoding;
-import org.apache.parquet.column.page.DataPage;
-import org.apache.parquet.column.page.DataPageV1;
-import org.apache.parquet.column.page.DataPageV2;
-import org.apache.parquet.column.page.DictionaryPage;
-import org.apache.parquet.column.page.PageReader;
+import org.apache.parquet.column.page.*;
+import org.apache.parquet.column.statistics.Statistics;
 import org.apache.parquet.column.values.RequiresPreviousReader;
 import org.apache.parquet.column.values.ValuesReader;
 import org.apache.parquet.column.values.rle.RunLengthBitPackingHybridDecoder;
@@ -51,14 +41,26 @@ import org.apache.parquet.io.api.Binary;
 import org.apache.parquet.io.api.PrimitiveConverter;
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName;
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeNameConverter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.util.function.Predicate;
+
+import static java.lang.String.format;
+import static org.apache.parquet.Log.DEBUG;
+import static org.apache.parquet.Preconditions.checkNotNull;
+import static org.apache.parquet.column.ValuesType.*;
 
 /**
  * ColumnReader implementation
  *
  * @author Julien Le Dem
+ * @author Modified by Hao Jiang to support page skipping
  */
-public class ColumnReaderImpl implements ColumnReader {
-    private static final Log LOG = Log.getLog(ColumnReaderImpl.class);
+public class SkippingColumnReaderImpl implements ColumnReader {
+    private static final Logger LOG = LoggerFactory.getLogger(SkippingColumnReaderImpl.class);
 
     /**
      * binds the lower level page decoder to the record converter materializing the records
@@ -76,6 +78,13 @@ public class ColumnReaderImpl implements ColumnReader {
          * skip one value from the underlying page
          */
         abstract void skip();
+
+        /**
+         * Skip n values from the underlying page
+         *
+         * @param n
+         */
+        abstract void skip(long n);
 
         /**
          * write current value to converter
@@ -148,8 +157,20 @@ public class ColumnReaderImpl implements ColumnReader {
     private int dictionaryId;
 
     private long endOfPageValueCount;
+
     private long readValues = 0;
+    private long validValues = 0;
+    private long readDatas = 0;
+
     private int pageValueCount = 0;
+
+    private long toSkip = 0;
+
+    private Predicate<Statistics<?>> pageFilter;
+    /**
+     * Marks the valid row position
+     */
+    private ForwardIterator rowFilter;
 
     private final PrimitiveConverter converter;
     private Binding binding;
@@ -169,12 +190,17 @@ public class ColumnReaderImpl implements ColumnReader {
                         dataColumn.skip();
                     }
 
+                    public void skip(long n) {
+                        dataColumn.skip(n);
+                    }
+
                     public int getDictionaryId() {
                         return dictionaryId;
                     }
 
                     void writeValue() {
-                        converter.addValueFromDictionary(dictionaryId);
+                        //System.out.println(dictionaryId);
+                        converter.addInt(dictionaryId);
                     }
 
                     public int getInteger() {
@@ -219,6 +245,11 @@ public class ColumnReaderImpl implements ColumnReader {
                         dataColumn.skip();
                     }
 
+                    public void skip(long n) {
+                        current = 0;
+                        dataColumn.skip(n);
+                    }
+
                     public float getFloat() {
                         return current;
                     }
@@ -241,6 +272,11 @@ public class ColumnReaderImpl implements ColumnReader {
                     public void skip() {
                         current = 0;
                         dataColumn.skip();
+                    }
+
+                    public void skip(long n) {
+                        current = 0;
+                        dataColumn.skip(n);
                     }
 
                     public double getDouble() {
@@ -267,12 +303,18 @@ public class ColumnReaderImpl implements ColumnReader {
                         dataColumn.skip();
                     }
 
+                    public void skip(long n) {
+                        current = 0;
+                        dataColumn.skip(n);
+                    }
+
                     @Override
                     public int getInteger() {
                         return current;
                     }
 
                     void writeValue() {
+                        System.out.println(current);
                         converter.addInt(current);
                     }
                 };
@@ -290,6 +332,11 @@ public class ColumnReaderImpl implements ColumnReader {
                     public void skip() {
                         current = 0;
                         dataColumn.skip();
+                    }
+
+                    public void skip(long n) {
+                        current = 0;
+                        dataColumn.skip(n);
                     }
 
                     @Override
@@ -328,6 +375,11 @@ public class ColumnReaderImpl implements ColumnReader {
                         dataColumn.skip();
                     }
 
+                    public void skip(long n) {
+                        current = false;
+                        dataColumn.skip(n);
+                    }
+
                     @Override
                     public boolean getBoolean() {
                         return current;
@@ -353,6 +405,11 @@ public class ColumnReaderImpl implements ColumnReader {
                         dataColumn.skip();
                     }
 
+                    public void skip(long n) {
+                        current = null;
+                        dataColumn.skip(n);
+                    }
+
                     @Override
                     public Binary getBinary() {
                         return current;
@@ -366,18 +423,18 @@ public class ColumnReaderImpl implements ColumnReader {
         });
     }
 
-    /**
-     * creates a reader for triplets
-     *
-     * @param path       the descriptor for the corresponding column
-     * @param pageReader the underlying store to read from
-     */
-    public ColumnReaderImpl(ColumnDescriptor path, PageReader pageReader, PrimitiveConverter converter, ParsedVersion writerVersion) {
+    public SkippingColumnReaderImpl(ColumnDescriptor path, PageReader pageReader, PrimitiveConverter converter,
+                                    ParsedVersion writerVersion, Predicate<Statistics<?>> pageFilter, ForwardIterator rowFilter) {
         this.path = checkNotNull(path, "path");
         this.pageReader = checkNotNull(pageReader, "pageReader");
         this.converter = checkNotNull(converter, "converter");
         this.writerVersion = writerVersion;
-        DictionaryPage dictionaryPage = pageReader.readDictionaryPage();
+        this.pageFilter = pageFilter;
+        this.rowFilter = rowFilter;
+
+        DictionaryPage dictionaryPage = null;
+        dictionaryPage = pageReader.readDictionaryPage();
+
         if (dictionaryPage != null) {
             try {
                 this.dictionary = dictionaryPage.getEncoding().initDictionary(path, dictionaryPage);
@@ -394,7 +451,25 @@ public class ColumnReaderImpl implements ColumnReader {
         if (totalValueCount <= 0) {
             throw new ParquetDecodingException("totalValueCount '" + totalValueCount + "' <= 0");
         }
+        if(this.rowFilter == null) {
+            this.rowFilter = new FullForwardIterator(totalValueCount);
+        }
         consume();
+    }
+
+    /**
+     * creates a reader for triplets
+     *
+     * @param path       the descriptor for the corresponding column
+     * @param pageReader the underlying store to read from
+     */
+    public SkippingColumnReaderImpl(ColumnDescriptor path, PageReader pageReader, PrimitiveConverter converter,
+                                    ParsedVersion writerVersion) {
+        this(path, pageReader, converter, writerVersion, stat -> true, null);
+    }
+
+    public Dictionary getDictionary() {
+        return dictionary;
     }
 
     private boolean isFullyConsumed() {
@@ -404,7 +479,7 @@ public class ColumnReaderImpl implements ColumnReader {
     /**
      * {@inheritDoc}
      *
-     * @see org.apache.parquet.column.ColumnReader#writeCurrentValueToConverter()
+     * @see ColumnReader#writeCurrentValueToConverter()
      */
     @Override
     public void writeCurrentValueToConverter() {
@@ -421,7 +496,7 @@ public class ColumnReaderImpl implements ColumnReader {
     /**
      * {@inheritDoc}
      *
-     * @see org.apache.parquet.column.ColumnReader#getInteger()
+     * @see ColumnReader#getInteger()
      */
     @Override
     public int getInteger() {
@@ -432,7 +507,7 @@ public class ColumnReaderImpl implements ColumnReader {
     /**
      * {@inheritDoc}
      *
-     * @see org.apache.parquet.column.ColumnReader#getBoolean()
+     * @see ColumnReader#getBoolean()
      */
     @Override
     public boolean getBoolean() {
@@ -443,7 +518,7 @@ public class ColumnReaderImpl implements ColumnReader {
     /**
      * {@inheritDoc}
      *
-     * @see org.apache.parquet.column.ColumnReader#getLong()
+     * @see ColumnReader#getLong()
      */
     @Override
     public long getLong() {
@@ -454,7 +529,7 @@ public class ColumnReaderImpl implements ColumnReader {
     /**
      * {@inheritDoc}
      *
-     * @see org.apache.parquet.column.ColumnReader#getBinary()
+     * @see ColumnReader#getBinary()
      */
     @Override
     public Binary getBinary() {
@@ -465,7 +540,7 @@ public class ColumnReaderImpl implements ColumnReader {
     /**
      * {@inheritDoc}
      *
-     * @see org.apache.parquet.column.ColumnReader#getFloat()
+     * @see ColumnReader#getFloat()
      */
     @Override
     public float getFloat() {
@@ -476,7 +551,7 @@ public class ColumnReaderImpl implements ColumnReader {
     /**
      * {@inheritDoc}
      *
-     * @see org.apache.parquet.column.ColumnReader#getDouble()
+     * @see ColumnReader#getDouble()
      */
     @Override
     public double getDouble() {
@@ -487,7 +562,7 @@ public class ColumnReaderImpl implements ColumnReader {
     /**
      * {@inheritDoc}
      *
-     * @see org.apache.parquet.column.ColumnReader#getCurrentRepetitionLevel()
+     * @see ColumnReader#getCurrentRepetitionLevel()
      */
     @Override
     public int getCurrentRepetitionLevel() {
@@ -497,7 +572,7 @@ public class ColumnReaderImpl implements ColumnReader {
     /**
      * {@inheritDoc}
      *
-     * @see org.apache.parquet.column.ColumnReader#getDescriptor()
+     * @see ColumnReader#getDescriptor()
      */
     @Override
     public ColumnDescriptor getDescriptor() {
@@ -511,6 +586,7 @@ public class ColumnReaderImpl implements ColumnReader {
         try {
             if (!valueRead) {
                 binding.read();
+                readDatas++;
                 valueRead = true;
             }
         } catch (RuntimeException e) {
@@ -543,20 +619,22 @@ public class ColumnReaderImpl implements ColumnReader {
     /**
      * {@inheritDoc}
      *
-     * @see org.apache.parquet.column.ColumnReader#skip()
+     * @see ColumnReader#skip()
      */
     @Override
     public void skip() {
         if (!valueRead) {
             binding.skip();
+            readDatas++;
             valueRead = true;
         }
     }
 
+
     /**
      * {@inheritDoc}
      *
-     * @see org.apache.parquet.column.ColumnReader#getCurrentDefinitionLevel()
+     * @see ColumnReader#getCurrentDefinitionLevel()
      */
     @Override
     public int getCurrentDefinitionLevel() {
@@ -565,27 +643,130 @@ public class ColumnReaderImpl implements ColumnReader {
 
     // TODO: change the logic around read() to not tie together reading from the 3 columns
     private void readRepetitionAndDefinitionLevels() {
-        repetitionLevel = repetitionLevelColumn.nextInt();
-        definitionLevel = definitionLevelColumn.nextInt();
+//        repetitionLevel = repetitionLevelColumn.nextInt();
+        if (this.optionalMode)
+            definitionLevel = definitionLevelColumn.nextInt();
+        validValues += (definitionLevel == getDescriptor().getMaxDefinitionLevel()) ? 1 : 0;
         ++readValues;
+    }
+
+    private long skipDefinitionAndRepetitionLevels(long numSkip) {
+        // Skip and count the number of non-zeros in def value ( for null skipping)
+        long numValid = numSkip;
+        if (this.optionalMode) {
+            numValid = definitionLevelColumn.skipWithCount(numSkip);
+        } else {
+            definitionLevelColumn.skip(numSkip);
+        }
+        readValues += numSkip;
+        validValues += numValid;
+        return numValid;
     }
 
     private void checkRead() {
         if (isPageFullyConsumed()) {
+            readPage();
+            // It is possible that all remaining pages can be skipped, need to check again
             if (isFullyConsumed()) {
-                if (DEBUG) LOG.debug("end reached");
-                repetitionLevel = 0; // the next repetition level
-                readValues++;
+                if (DEBUG)
+                    LOG.debug("end reached");
                 return;
             }
-            readPage();
         }
-        readRepetitionAndDefinitionLevels();
+
+        // Move to the next valid position marked by row filter
+        if (toSkip > 0) {
+            consumeTo(readValues + toSkip);
+            toSkip = 0;
+        } else {
+            long currentPos = readValues;
+            rowFilter.startfrom(currentPos);
+            if (rowFilter.hasNext()) {
+                long nextPos = rowFilter.nextLong();
+                if (nextPos != currentPos) {
+                    consumeTo(nextPos);
+                } else {
+                    // Simply read the current value
+                    readRepetitionAndDefinitionLevels();
+                    valueRead = false;
+                }
+            } else {
+                readValues = totalValueCount + 1;
+                return;
+            }
+        }
     }
 
+    public long getReadValues() {
+        return this.readValues;
+    }
+
+    public long getCurPos() {
+        return this.readValues - 1;
+    }
+
+    public int getPageValueCount() {
+        return this.pageValueCount;
+    }
+
+    /**
+     * This method looks for the next valid page satisfying both page filter and row filter.
+     * After it returns, the toSkip property will be updated to reflect the next number to read.
+     */
     private void readPage() {
-        if (DEBUG) LOG.debug("loading page");
+        if (DEBUG)
+            LOG.debug("loading page");
+
+        if (isFullyConsumed()) {
+            readValues++;
+            return;
+        }
+        DataPage.Visitor<Boolean> acceptPage = new DataPage.Visitor<Boolean>() {
+            @Override
+            public Boolean visit(DataPageV1 dataPageV1) {
+                return pageFilter.test(dataPageV1.getStatistics());
+            }
+
+            @Override
+            public Boolean visit(DataPageV2 dataPageV2) {
+                return pageFilter.test(dataPageV2.getStatistics());
+            }
+        };
+        // If the page fails filter test, skip it
+        // If the page is not included in the row filter, skip it
+
+        // First use the toSkip to consume pages
         DataPage page = pageReader.readPage();
+
+        while (page != null && toSkip >= page.getValueCount()) {
+            this.readValues += page.getValueCount();
+            this.validValues = this.readValues;
+            this.readDatas = this.readValues;
+            this.endOfPageValueCount += page.getValueCount();
+            toSkip -= page.getValueCount();
+            page = pageReader.readPage();
+        }
+        // Check pageFilter for next valid page
+        while (page != null && !page.accept(acceptPage)) {
+            // Need recompute
+            toSkip = -1;
+            this.readValues += page.getValueCount();
+            this.validValues = this.readValues;
+            this.readDatas = this.readValues;
+            this.endOfPageValueCount += page.getValueCount();
+            page = pageReader.readPage();
+        }
+
+        if (isFullyConsumed()) {
+            if (DEBUG)
+                LOG.debug("end reached");
+            readValues++;
+            repetitionLevel = 0; // the next repetition level
+            return;
+        }
+
+        this.endOfPageValueCount += page.getValueCount();
+
         page.accept(new DataPage.Visitor<Void>() {
             @Override
             public Void visit(DataPageV1 dataPageV1) {
@@ -599,11 +780,11 @@ public class ColumnReaderImpl implements ColumnReader {
                 return null;
             }
         });
+
     }
 
     private void initDataReader(Encoding dataEncoding, ByteBuffer bytes, int offset, int valueCount) {
         ValuesReader previousReader = this.dataColumn;
-
         this.currentEncoding = dataEncoding;
         this.pageValueCount = valueCount;
         this.endOfPageValueCount = readValues + pageValueCount;
@@ -617,9 +798,12 @@ public class ColumnReaderImpl implements ColumnReader {
         } else {
             this.dataColumn = dataEncoding.getValuesReader(path, VALUES);
         }
-        if (dataEncoding.usesDictionary() && converter.hasDictionarySupport()) {
+        //if (dataEncoding.usesDictionary() && converter.hasDictionarySupport()) {
+        if (dataEncoding.usesDictionary()) {
+            //System.out.println("use dictionary value reader");
             bindToDictionary(dictionary);
         } else {
+            //System.out.println("do not use dictionary value reader");
             bind(path.getType());
         }
         try {
@@ -642,14 +826,18 @@ public class ColumnReaderImpl implements ColumnReader {
         this.definitionLevelColumn = new ValuesReaderIntIterator(dlReader);
         try {
             ByteBuffer bytes = page.getBytes().toByteBuffer();
-            if (DEBUG) LOG.debug("page size " + bytes.remaining() + " bytes and " + pageValueCount + " records");
-            if (DEBUG) LOG.debug("reading repetition levels at 0");
+            if (DEBUG) {
+                LOG.debug("page size {} bytes and {} records", bytes.remaining(), pageValueCount);
+                LOG.debug("reading repetition levels at 0");
+            }
             rlReader.initFromPage(pageValueCount, bytes, 0);
             int next = rlReader.getNextOffset();
-            if (DEBUG) LOG.debug("reading definition levels at " + next);
+            if (DEBUG)
+                LOG.debug("reading definition levels at {}", next);
             dlReader.initFromPage(pageValueCount, bytes, next);
             next = dlReader.getNextOffset();
-            if (DEBUG) LOG.debug("reading data at " + next);
+            if (DEBUG)
+                LOG.debug("reading data at {}", next);
             initDataReader(page.getValueEncoding(), bytes, next, page.getValueCount());
         } catch (IOException e) {
             throw new ParquetDecodingException("could not read page " + page + " in col " + path, e);
@@ -661,7 +849,7 @@ public class ColumnReaderImpl implements ColumnReader {
         this.definitionLevelColumn = newRLEIterator(path.getMaxDefinitionLevel(), page.getDefinitionLevels());
         try {
             if (DEBUG)
-                LOG.debug("page data size " + page.getData().size() + " bytes and " + pageValueCount + " records");
+                LOG.debug("page data size {} bytes and {} records", page.getData().size(), pageValueCount);
             initDataReader(page.getDataEncoding(), page.getData().toByteBuffer(), 0, page.getValueCount());
         } catch (IOException e) {
             throw new ParquetDecodingException("could not read page " + page + " in col " + path, e);
@@ -689,7 +877,7 @@ public class ColumnReaderImpl implements ColumnReader {
     /**
      * {@inheritDoc}
      *
-     * @see org.apache.parquet.column.ColumnReader#consume()
+     * @see ColumnReader#consume()
      */
     @Override
     public void consume() {
@@ -697,20 +885,47 @@ public class ColumnReaderImpl implements ColumnReader {
         valueRead = false;
     }
 
-    public void consumeTo(long pos) {
-        while (readValues <= pos) {
-            consume();
+    public void consumeTo(long location) {
+        if (location <= readValues - 1) {
+            return;
         }
+        if (location >= totalValueCount)
+            if (DEBUG)
+                LOG.debug("Skip too much, reach the end!");
+        if (location < endOfPageValueCount) {
+            // Enough records left in current page
+            consumeInPage(location - readValues + 1);
+        } else {
+            // Crossing page boundary skipping
+            // Discard the remaining values in current page
+            toSkip = location - endOfPageValueCount;
+            readValues = endOfPageValueCount;
+            // When a new page is read, these values are reset
+            validValues = readValues;
+            readDatas = readValues;
+            // After this call, we are guaranteed to come to a valid page or to the end
+            checkRead();
+        }
+        valueRead = false;
     }
 
-    public long getReadValues() {
-        return readValues;
+    protected void consumeInPage(long numConsume) {
+        if (0 == numConsume) {
+            return;
+        }
+        long numValid = skipDefinitionAndRepetitionLevels(numConsume - 1);
+
+        if (validValues > readDatas) {
+            binding.skip(validValues - readDatas);
+            readDatas = validValues;
+        }
+        readRepetitionAndDefinitionLevels();
     }
 
     /**
      * {@inheritDoc}
      *
-     * @see org.apache.parquet.column.ColumnReader#getTotalValueCount()
+     * @see ColumnReader#getTotalValueCount()
      */
     @Override
     public long getTotalValueCount() {
@@ -719,6 +934,24 @@ public class ColumnReaderImpl implements ColumnReader {
 
     static abstract class IntIterator {
         abstract int nextInt();
+
+        void skip(long count) {
+            for (long i = 0; i < count; i++) {
+                nextInt();
+            }
+        }
+
+        /**
+         * @param count
+         * @return the number of non-zeros
+         */
+        long skipWithCount(long count) {
+            long counter = 0;
+            for (long i = 0; i < count; i++) {
+                counter += nextInt() == 0 ? 0 : 1;
+            }
+            return count;
+        }
     }
 
     static class ValuesReaderIntIterator extends IntIterator {
@@ -732,6 +965,16 @@ public class ColumnReaderImpl implements ColumnReader {
         @Override
         int nextInt() {
             return delegate.readInteger();
+        }
+
+        @Override
+        void skip(long count) {
+            delegate.skip(count);
+        }
+
+        @Override
+        long skipWithCount(long count) {
+            return delegate.skipWithCount(count);
         }
     }
 
@@ -750,6 +993,24 @@ public class ColumnReaderImpl implements ColumnReader {
                 throw new ParquetDecodingException(e);
             }
         }
+
+        @Override
+        void skip(long count) {
+            try {
+                delegate.skip(count);
+            } catch (IOException e) {
+                throw new ParquetDecodingException(e);
+            }
+        }
+
+        @Override
+        long skipWithCount(long count) {
+            try {
+                return delegate.skipWithCount(count);
+            } catch (IOException e) {
+                throw new ParquetDecodingException(e);
+            }
+        }
     }
 
     private static final class NullIntIterator extends IntIterator {
@@ -757,5 +1018,12 @@ public class ColumnReaderImpl implements ColumnReader {
         int nextInt() {
             return 0;
         }
+
+    }
+
+    private boolean optionalMode = true;
+
+    public void useOptionalMode(boolean use) {
+        this.optionalMode = use;
     }
 }

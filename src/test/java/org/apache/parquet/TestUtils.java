@@ -28,7 +28,7 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.column.ColumnDescriptor;
-import org.apache.parquet.column.impl.ColumnReaderImpl;
+import org.apache.parquet.column.impl.SkippingColumnReaderImpl;
 import org.apache.parquet.column.page.PageReadStore;
 import org.apache.parquet.hadoop.Footer;
 import org.apache.parquet.hadoop.ParquetFileReader;
@@ -71,8 +71,8 @@ public class TestUtils {
         ColumnDescriptor coldesc = footer.getParquetMetadata()
                 .getFileMetaData().getSchema().getColumns().get(columnId);
 
-        ColumnReaderImpl columnReader =
-                new ColumnReaderImpl(coldesc, rowGroup.getPageReader(coldesc),
+        SkippingColumnReaderImpl columnReader =
+                new SkippingColumnReaderImpl(coldesc, rowGroup.getPageReader(coldesc),
                         new NonePrimitiveConverter(), version);
         int[] values = new int[(int) rowGroup.getRowCount()];
 
