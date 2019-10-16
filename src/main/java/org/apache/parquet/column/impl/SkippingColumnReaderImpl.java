@@ -451,7 +451,7 @@ public class SkippingColumnReaderImpl implements ColumnReader {
         if (totalValueCount <= 0) {
             throw new ParquetDecodingException("totalValueCount '" + totalValueCount + "' <= 0");
         }
-        if(this.rowFilter == null) {
+        if (this.rowFilter == null) {
             this.rowFilter = new FullForwardIterator(totalValueCount);
         }
         consume();
@@ -686,6 +686,9 @@ public class SkippingColumnReaderImpl implements ColumnReader {
                 if (nextPos != currentPos) {
                     consumeTo(nextPos);
                 } else {
+                    if (readValues > 0 && !valueRead) {
+                        skip();
+                    }
                     // Simply read the current value
                     readRepetitionAndDefinitionLevels();
                     valueRead = false;

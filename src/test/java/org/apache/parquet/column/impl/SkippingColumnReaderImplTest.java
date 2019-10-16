@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 import java.util.function.Predicate;
 
 import static org.apache.parquet.TestUtils.readFooter;
@@ -265,5 +266,28 @@ class SkippingColumnReaderImplTest {
         for (int i = 0; i < buffer.size(); i++) {
             assertEquals(expect.get(i), buffer.get(i));
         }
+    }
+
+    @Test
+    public void multiconsume() throws Exception {
+        Configuration conf = new Configuration();
+        // This is a file containing number from 0 to 49999
+        Footer footer = readFooter("multipage_autoinc.parquet", conf);
+
+        ParquetFileReader fileReader = ParquetFileReader.open(conf, footer.getFile());
+        VersionParser.ParsedVersion version =
+                VersionParser.parse(footer.getParquetMetadata().getFileMetaData().getCreatedBy());
+        PageReadStore rowGroup = fileReader.readNextRowGroup();
+        ColumnDescriptor coldesc = footer.getParquetMetadata()
+                .getFileMetaData().getSchema().getColumns().get(0);
+
+        SkippingColumnReaderImpl columnReader =
+                new SkippingColumnReaderImpl(coldesc, rowGroup.getPageReader(coldesc),
+                        new NonePrimitiveConverter(), version);
+        int n = new Random(System.currentTimeMillis()).nextInt(10) + 10;
+        for (int i = 0; i < n; i++) {
+            columnReader.consume();
+        }
+        assertEquals(n, columnReader.getInteger());
     }
 }
