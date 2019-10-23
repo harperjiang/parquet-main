@@ -41,4 +41,9 @@ class VarlenBitPackingValuesReaderTest {
             assertEquals(recorder.get(i), reader.readInteger(), String.valueOf(i));
         }
     }
+
+    @Test
+    void skip() {
+        fail("Not implemented");
+    }
 }

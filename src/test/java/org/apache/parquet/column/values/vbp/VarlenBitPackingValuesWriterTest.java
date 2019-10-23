@@ -40,7 +40,7 @@ class VarlenBitPackingValuesWriterTest {
 
 
         byte[] buffer = new byte[36];
-        BytePacker packer = Packer.BIG_ENDIAN.newBytePacker(9);
+        BytePacker packer = Packer.LITTLE_ENDIAN.newBytePacker(9);
         int[] result = new int[32];
 
         for (int rep = 0; rep < 20; rep++) {
@@ -103,7 +103,7 @@ class VarlenBitPackingValuesWriterTest {
         for (int rep = 0; rep < 19; rep++) {
             int bitWidth = input.read();
             int base = BytesUtils.readZigZagVarInt(input);
-            BytePacker packer = Packer.BIG_ENDIAN.newBytePacker(bitWidth);
+            BytePacker packer = Packer.LITTLE_ENDIAN.newBytePacker(bitWidth);
             byte[] buffer = new byte[4 * bitWidth];
             int[] result = new int[32];
 
@@ -119,7 +119,7 @@ class VarlenBitPackingValuesWriterTest {
 
         int bitWidth = input.read();
         int base = BytesUtils.readZigZagVarInt(input);
-        BytePacker packer = Packer.BIG_ENDIAN.newBytePacker(bitWidth);
+        BytePacker packer = Packer.LITTLE_ENDIAN.newBytePacker(bitWidth);
         byte[] buffer = new byte[4 * bitWidth];
         int[] result = new int[32];
 

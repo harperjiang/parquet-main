@@ -16,7 +16,6 @@ import java.nio.ByteBuffer;
 public class VarlenBitPackingValuesReader extends ValuesReader {
 
     private int nextOffset;
-    private int numGroup;
     private int valueRemain;
 
     private int currentGroupRemain;
@@ -44,19 +43,17 @@ public class VarlenBitPackingValuesReader extends ValuesReader {
         int length = BytesUtils.readIntLittleEndian(input);
 
         nextOffset = offset + 8 + length;
-        readNextGroup();
+        readNextGroupHeader();
+        readNext32Number();
     }
 
 
-    void readNextGroup() {
+    void readNextGroupHeader() {
         try {
             currentBitWidth = input.read();
             currentGroupRemain = Math.min(512, valueRemain);
             currentGroupBase = BytesUtils.readZigZagVarInt(input);
-            packer = Packer.BIG_ENDIAN.newBytePacker(currentBitWidth);
-
-            valueRemain -= currentGroupRemain;
-            readNext32Number();
+            packer = Packer.LITTLE_ENDIAN.newBytePacker(currentBitWidth);
         } catch (IOException e) {
             throw new ParquetEncodingException("can not read block", e);
         }
@@ -87,24 +84,40 @@ public class VarlenBitPackingValuesReader extends ValuesReader {
             // Still in current buffer
             if (bufferPointer + numRecords < bufferSize) {
                 bufferPointer += numRecords;
-            } else if (numRecords < currentGroupRemain) {
-                // Still within current group
-                remain -= (bufferSize - bufferPointer - 1);
-                input.skip(((remain >> 5) << 5) * currentBitWidth);
+            } else {
+                remain -= bufferSize - bufferPointer;
+                if (remain < currentGroupRemain) {
+                    // Still within current group
+                    // Use up current buffer
+                    // Skip 32 num groups
+                    int group32toSkip = (remain >> 5);
+                    input.skip((group32toSkip * currentBitWidth) << 2);
+                    currentGroupRemain -= group32toSkip * 32;
 
-                readNext32Number();
-                bufferPointer = remain & 0x1F;
-            } else { // Calculate the target group and stripe
-                remain -= currentGroupRemain;
-                input.skip(((currentGroupRemain >> 5) << 5) * currentBitWidth);
-                while (remain >= 0x1FF) {
-                    // skip the whole group
-                    currentBitWidth = input.read();
-                    currentGroupBase = BytesUtils.readZigZagVarInt(input);
-                    input.skip(currentBitWidth << 6);
-                    remain -= 0x1FF;
+                    readNext32Number();
+                    bufferPointer = remain & 0x1F;
+                } else { // Calculate the target group and stripe
+                    remain -= currentGroupRemain;
+                    // Skip the unread data in current group
+                    input.skip((((currentGroupRemain >> 5) << 5) * currentBitWidth) >> 3);
+                    while (remain >= 512) {
+                        // skip the whole group
+                        currentBitWidth = input.read();
+                        currentGroupBase = BytesUtils.readZigZagVarInt(input);
+                        input.skip(currentBitWidth << 6);
+                        remain -= 512;
+                    }
+                    readNextGroupHeader();
+                    while (remain > 32) {
+                        input.skip(4 * currentBitWidth);
+                        currentGroupRemain-=32;
+                        remain -= 32;
+                    }
+                    readNext32Number();
+                    bufferPointer = remain;
                 }
             }
+            this.valueRemain -= numRecords;
         } catch (IOException e) {
             throw new ParquetEncodingException("can not skip records", e);
         }
@@ -112,13 +125,15 @@ public class VarlenBitPackingValuesReader extends ValuesReader {
 
     @Override
     public int readInteger() {
-        if (bufferPointer == bufferSize) {
+        if (bufferPointer == bufferSize || bufferSize == 0) {
             if (currentGroupRemain == 0) {
-                readNextGroup();
+                readNextGroupHeader();
+                readNext32Number();
             } else {
                 readNext32Number();
             }
         }
+        valueRemain--;
         return currentGroupBase + unpackBuffer[bufferPointer++];
     }
 

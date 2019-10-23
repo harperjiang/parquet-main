@@ -93,7 +93,7 @@ public class VarlenBitPackingValuesWriter extends ValuesWriter {
             BytesUtils.writeZigZagVarInt(min, output);
 
             // Write bit-packed data block
-            BytePacker packer = Packer.BIG_ENDIAN.newBytePacker(bitWidth);
+            BytePacker packer = Packer.LITTLE_ENDIAN.newBytePacker(bitWidth);
 
             // Pack 16 times for 512 values
             int rounds = (bufferPointer + 31) >> 5;
