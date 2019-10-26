@@ -43,7 +43,32 @@ class VarlenBitPackingValuesReaderTest {
     }
 
     @Test
-    void skip() {
-        fail("Not implemented");
+    void skip() throws Exception {
+        VarlenBitPackingValuesWriter writer = new VarlenBitPackingValuesWriter(
+                ParquetProperties.builder().build().getInitialSlabSize(),
+                ParquetWriter.DEFAULT_PAGE_SIZE, new DirectByteBufferAllocator());
+        VarlenBitPackingValuesReader reader = new VarlenBitPackingValuesReader();
+
+        Random rand = new Random();
+        List<Integer> recorder = new ArrayList();
+        int count = 1000000;
+        for (int i = 0; i < count; i++) {
+            int value = rand.nextInt() & 0x7FFFFFFF;
+            writer.writeInteger(value);
+            recorder.add(value);
+        }
+
+        ByteBuffer buffer = writer.getBytes().toByteBuffer();
+
+        reader.initFromPage(count, buffer, 0);
+
+        reader.skip(10);
+        assertEquals(11, reader.readInteger());
+
+        reader.skip(100);
+        assertEquals(111, reader.readInteger());
+
+        reader.skip(1000);
+        assertEquals(1111, reader.readInteger());
     }
 }

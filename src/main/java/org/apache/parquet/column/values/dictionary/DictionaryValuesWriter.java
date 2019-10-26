@@ -1,26 +1,25 @@
 /*
  * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements. See the NOTICE file
+ * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
- * regarding copyright ownership. The ASF licenses this file
+ * regarding copyright ownership.  The ASF licenses this file
  * to you under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance
- * with the License. You may obtain a copy of the License at
+ * with the License.  You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing,
  * software distributed under the License is distributed on an
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied. See the License for the
+ * KIND, either express or implied.  See the License for the
  * specific language governing permissions and limitations
- * under the License,
- *
- * Contributors:
- *     Hao Jiang - initial API and implementation
+ * under the License.
  */
 package org.apache.parquet.column.values.dictionary;
 
+import static org.apache.parquet.Log.DEBUG;
+import static org.apache.parquet.bytes.BytesInput.concat;
 import it.unimi.dsi.fastutil.doubles.Double2IntLinkedOpenHashMap;
 import it.unimi.dsi.fastutil.doubles.Double2IntMap;
 import it.unimi.dsi.fastutil.doubles.DoubleIterator;
@@ -29,15 +28,20 @@ import it.unimi.dsi.fastutil.floats.Float2IntMap;
 import it.unimi.dsi.fastutil.floats.FloatIterator;
 import it.unimi.dsi.fastutil.ints.Int2IntLinkedOpenHashMap;
 import it.unimi.dsi.fastutil.ints.Int2IntMap;
-import it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2IntLinkedOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2IntMap;
 import it.unimi.dsi.fastutil.longs.LongIterator;
 import it.unimi.dsi.fastutil.objects.Object2IntLinkedOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Object2IntMap;
 import it.unimi.dsi.fastutil.objects.ObjectIterator;
-import org.apache.parquet.Log;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+
 import org.apache.parquet.bytes.ByteBufferAllocator;
+import org.apache.parquet.Log;
 import org.apache.parquet.bytes.BytesInput;
 import org.apache.parquet.bytes.BytesUtils;
 import org.apache.parquet.bytes.CapacityByteArrayOutputStream;
@@ -52,21 +56,12 @@ import org.apache.parquet.column.values.rle.RunLengthBitPackingHybridEncoder;
 import org.apache.parquet.io.ParquetEncodingException;
 import org.apache.parquet.io.api.Binary;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Iterator;
-import java.util.List;
-
-import static org.apache.parquet.Log.DEBUG;
-import static org.apache.parquet.bytes.BytesInput.concat;
-
 /**
  * Will attempt to encode values using a dictionary and fall back to plain encoding
- * if the dictionary gets too big
+ *  if the dictionary gets too big
  *
  * @author Julien Le Dem
- * @author Modified by Hao to support Order-Preserving Dictionary
+ *
  */
 public abstract class DictionaryValuesWriter extends ValuesWriter implements RequiresFallback {
     private static final Log LOG = Log.getLog(DictionaryValuesWriter.class);
@@ -99,9 +94,7 @@ public abstract class DictionaryValuesWriter extends ValuesWriter implements Req
     /* dictionary encoded values */
     protected IntList encodedValues = new IntList();
 
-    /**
-     * indicates if this is the first page being processed
-     */
+    /** indicates if this is the first page being processed */
     protected boolean firstPage = true;
 
     protected ByteBufferAllocator allocator;
@@ -162,13 +155,8 @@ public abstract class DictionaryValuesWriter extends ValuesWriter implements Req
         return encodedValues.size() * 4 + dictionaryByteSize;
     }
 
-    protected void sortDictionary() {
-
-    }
-
     @Override
     public BytesInput getBytes() {
-        sortDictionary();
         int maxDicId = getDictionarySize() - 1;
         if (DEBUG) LOG.debug("max dic id " + maxDicId);
         int bitWidth = BytesUtils.getWidthFromMaxInt(maxDicId);
@@ -184,7 +172,7 @@ public abstract class DictionaryValuesWriter extends ValuesWriter implements Req
                 encoder.writeInt(iterator.next());
             }
             // encodes the bit width
-            byte[] bytesHeader = new byte[]{(byte) bitWidth};
+            byte[] bytesHeader = new byte[] { (byte) bitWidth };
             BytesInput rleEncodedBytes = encoder.toBytes();
             if (DEBUG) LOG.debug("rle encoded bytes " + rleEncodedBytes.size());
             BytesInput bytes = concat(BytesInput.from(bytesHeader), rleEncodedBytes);
@@ -275,27 +263,6 @@ public abstract class DictionaryValuesWriter extends ValuesWriter implements Req
                 dictionaryByteSize += 4 + v.length();
             }
             encodedValues.add(id);
-        }
-
-        @Override
-        protected void sortDictionary() {
-            // Sort the entry in dictionary content and re-encode the entries
-            Object[] sorted = binaryDictionaryContent.keySet().toArray();
-            Arrays.sort(sorted);
-            Int2IntMap mapping = new Int2IntOpenHashMap();
-            Object2IntMap<Binary> newBinaryDictionaryContent = new Object2IntLinkedOpenHashMap<>();
-            for (int i = 0; i < sorted.length; i++) {
-                mapping.put(binaryDictionaryContent.getInt(sorted[i]), i);
-                newBinaryDictionaryContent.put((Binary) sorted[i], i);
-            }
-            binaryDictionaryContent = newBinaryDictionaryContent;
-
-            IntList newEncodedValues = new IntList();
-            IntIterator it = encodedValues.iterator();
-            while (it.hasNext()) {
-                newEncodedValues.add(mapping.get(it.next()));
-            }
-            encodedValues = newEncodedValues;
         }
 
         @Override
@@ -461,7 +428,7 @@ public abstract class DictionaryValuesWriter extends ValuesWriter implements Req
     public static class PlainDoubleDictionaryValuesWriter extends DictionaryValuesWriter {
 
         /* type specific dictionary content */
-        private Double2IntMap doubleDictionaryContent = new Double2IntLinkedOpenHashMap();
+        protected Double2IntMap doubleDictionaryContent = new Double2IntLinkedOpenHashMap();
 
         /**
          * @param maxDictionaryByteSize
@@ -532,7 +499,7 @@ public abstract class DictionaryValuesWriter extends ValuesWriter implements Req
     public static class PlainIntegerDictionaryValuesWriter extends DictionaryValuesWriter {
 
         /* type specific dictionary content */
-        private Int2IntMap intDictionaryContent = new Int2IntLinkedOpenHashMap();
+        protected Int2IntMap intDictionaryContent = new Int2IntLinkedOpenHashMap();
 
         /**
          * @param maxDictionaryByteSize
@@ -551,28 +518,6 @@ public abstract class DictionaryValuesWriter extends ValuesWriter implements Req
                 dictionaryByteSize += 4;
             }
             encodedValues.add(id);
-        }
-
-        @Override
-        protected void sortDictionary() {
-            Int2IntMap newIntDictionaryContent = new Int2IntLinkedOpenHashMap();
-            Int2IntMap mapping = new Int2IntOpenHashMap();
-
-            int[] sorted = intDictionaryContent.keySet().toIntArray();
-            Arrays.sort(sorted);
-            for (int i = 0; i < sorted.length; i++) {
-                mapping.put(intDictionaryContent.get(sorted[i]), i);
-                newIntDictionaryContent.put(sorted[i], i);
-            }
-
-            intDictionaryContent = newIntDictionaryContent;
-
-            IntList newEncodedValues = new IntList();
-            IntIterator it = encodedValues.iterator();
-            while (it.hasNext()) {
-                newEncodedValues.add(mapping.get(it.next()));
-            }
-            encodedValues = newEncodedValues;
         }
 
         @Override
