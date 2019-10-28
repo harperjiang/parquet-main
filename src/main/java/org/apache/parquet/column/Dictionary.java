@@ -53,6 +53,8 @@ public abstract class Dictionary {
         throw new UnsupportedOperationException();
     }
 
+    public int encodeDouble(double value) {throw new UnsupportedOperationException();}
+
     public Binary decodeToBinary(int id) {
         throw new UnsupportedOperationException(this.getClass().getName());
     }

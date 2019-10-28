@@ -47,6 +47,13 @@ public interface ColumnReader {
     long getTotalValueCount();
 
     /**
+     * Current position
+     *
+     * @return
+     */
+    long getReadValues();
+
+    /**
      * Consume the current triplet, moving to the next value.
      */
     void consume();
