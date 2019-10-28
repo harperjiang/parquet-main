@@ -63,12 +63,12 @@ class VarlenBitPackingValuesReaderTest {
         reader.initFromPage(count, buffer, 0);
 
         reader.skip(10);
-        assertEquals(11, reader.readInteger());
+        assertEquals(recorder.get(10), reader.readInteger());
 
         reader.skip(100);
-        assertEquals(111, reader.readInteger());
+        assertEquals(recorder.get(111), reader.readInteger());
 
         reader.skip(1000);
-        assertEquals(1111, reader.readInteger());
+        assertEquals(recorder.get(1112), reader.readInteger());
     }
 }

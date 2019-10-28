@@ -20,6 +20,7 @@ package org.apache.parquet.column.values.dictionary;
 
 import static org.apache.parquet.Log.DEBUG;
 import static org.apache.parquet.bytes.BytesInput.concat;
+
 import it.unimi.dsi.fastutil.doubles.Double2IntLinkedOpenHashMap;
 import it.unimi.dsi.fastutil.doubles.Double2IntMap;
 import it.unimi.dsi.fastutil.doubles.DoubleIterator;
@@ -58,10 +59,9 @@ import org.apache.parquet.io.api.Binary;
 
 /**
  * Will attempt to encode values using a dictionary and fall back to plain encoding
- *  if the dictionary gets too big
+ * if the dictionary gets too big
  *
  * @author Julien Le Dem
- *
  */
 public abstract class DictionaryValuesWriter extends ValuesWriter implements RequiresFallback {
     private static final Log LOG = Log.getLog(DictionaryValuesWriter.class);
@@ -94,7 +94,9 @@ public abstract class DictionaryValuesWriter extends ValuesWriter implements Req
     /* dictionary encoded values */
     protected IntList encodedValues = new IntList();
 
-    /** indicates if this is the first page being processed */
+    /**
+     * indicates if this is the first page being processed
+     */
     protected boolean firstPage = true;
 
     protected ByteBufferAllocator allocator;
@@ -172,7 +174,7 @@ public abstract class DictionaryValuesWriter extends ValuesWriter implements Req
                 encoder.writeInt(iterator.next());
             }
             // encodes the bit width
-            byte[] bytesHeader = new byte[] { (byte) bitWidth };
+            byte[] bytesHeader = new byte[]{(byte) bitWidth};
             BytesInput rleEncodedBytes = encoder.toBytes();
             if (DEBUG) LOG.debug("rle encoded bytes " + rleEncodedBytes.size());
             BytesInput bytes = concat(BytesInput.from(bytesHeader), rleEncodedBytes);

@@ -35,6 +35,7 @@ import org.apache.parquet.column.page.*;
 import org.apache.parquet.column.statistics.Statistics;
 import org.apache.parquet.column.values.RequiresPreviousReader;
 import org.apache.parquet.column.values.ValuesReader;
+import org.apache.parquet.column.values.dictionary.EmptyDictionary;
 import org.apache.parquet.column.values.rle.RunLengthBitPackingHybridDecoder;
 import org.apache.parquet.io.ParquetDecodingException;
 import org.apache.parquet.io.api.Binary;
@@ -445,7 +446,7 @@ public class SkippingColumnReaderImpl implements ColumnReader {
                 throw new ParquetDecodingException("could not decode the dictionary for " + path, e);
             }
         } else {
-            this.dictionary = null;
+            this.dictionary = EmptyDictionary.INSTANCE;
         }
         this.totalValueCount = pageReader.getTotalValueCount();
         if (totalValueCount <= 0) {
@@ -686,7 +687,8 @@ public class SkippingColumnReaderImpl implements ColumnReader {
                 if (nextPos != currentPos) {
                     consumeTo(nextPos);
                 } else {
-                    if (readValues > 0 && !valueRead) {
+                    // Align definitionLevel with data
+                    if (validValues > readDatas) {
                         skip();
                     }
                     // Simply read the current value
@@ -740,6 +742,7 @@ public class SkippingColumnReaderImpl implements ColumnReader {
 
         // First use the toSkip to consume pages
         DataPage page = pageReader.readPage();
+        dictionary.nextPage();
 
         while (page != null && toSkip >= page.getValueCount()) {
             this.readValues += page.getValueCount();
@@ -748,6 +751,7 @@ public class SkippingColumnReaderImpl implements ColumnReader {
             this.endOfPageValueCount += page.getValueCount();
             toSkip -= page.getValueCount();
             page = pageReader.readPage();
+            dictionary.nextPage();
         }
         // Check pageFilter for next valid page
         while (page != null && !page.accept(acceptPage)) {
@@ -758,6 +762,7 @@ public class SkippingColumnReaderImpl implements ColumnReader {
             this.readDatas = this.readValues;
             this.endOfPageValueCount += page.getValueCount();
             page = pageReader.readPage();
+            dictionary.nextPage();
         }
 
         if (isFullyConsumed()) {

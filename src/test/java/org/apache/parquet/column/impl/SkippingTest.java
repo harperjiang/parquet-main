@@ -252,9 +252,9 @@ public class SkippingTest {
     }
 
     @Test
-    public void testSkippingWithNullValueDebug() throws Exception {
+    public void testSkippingDebug() throws Exception {
         Configuration conf = new Configuration();
-        Footer footer = readFooter("withnull.parquet", conf);
+        Footer footer = readFooter("multipage_rle.parquet", conf);
 
         ParquetFileReader fileReader = ParquetFileReader.open(conf, footer.getFile());
         VersionParser.ParsedVersion version =
@@ -282,10 +282,8 @@ public class SkippingTest {
                 rowGroup.getPageReader(coldesc), new NonePrimitiveConverter(), version);
 
 
-        reader.consumeTo(1);
-        assertEquals(values[1].intValue(), reader.getInteger());
-        reader.consumeTo(78);
-        assertEquals(values[78].intValue(), reader.getInteger());
+        reader.consumeTo(300);
+        assertEquals(values[300].intValue(), reader.getInteger());
     }
 
 

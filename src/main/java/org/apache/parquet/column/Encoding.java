@@ -26,6 +26,7 @@ import org.apache.parquet.column.values.delta.DeltaBinaryPackingValuesReader;
 import org.apache.parquet.column.values.deltalengthbytearray.DeltaLengthByteArrayValuesReader;
 import org.apache.parquet.column.values.deltastrings.DeltaByteArrayReader;
 import org.apache.parquet.column.values.dictionary.DictionaryValuesReader;
+import org.apache.parquet.column.values.dictionary.OnePassOrderPreservingDictionary;
 import org.apache.parquet.column.values.dictionary.PlainValuesDictionary.*;
 import org.apache.parquet.column.values.plain.BinaryPlainValuesReader;
 import org.apache.parquet.column.values.plain.BooleanPlainValuesReader;
@@ -224,6 +225,24 @@ public enum Encoding {
         public boolean usesDictionary() {
             return true;
         }
+
+    },
+
+    OPOP_DICTIONARY {
+        @Override
+        public Dictionary initDictionary(ColumnDescriptor descriptor, DictionaryPage dictionaryPage) throws IOException {
+            switch (descriptor.getType()) {
+                case BINARY:
+                    return new OnePassOrderPreservingDictionary.BinaryDictionary(dictionaryPage);
+                case DOUBLE:
+                    return new PlainDoubleDictionary(dictionaryPage);
+                case INT32:
+                    return new PlainIntegerDictionary(dictionaryPage);
+                default:
+                    throw new ParquetDecodingException("Dictionary encoding not supported for type: " + descriptor.getType());
+            }
+        }
+
 
     };
 
