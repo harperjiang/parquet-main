@@ -1,5 +1,8 @@
 package org.apache.parquet.column.values.dictionary;
 
+import edu.uchicago.cs.db.common.functional.IntDoubleConsumer;
+import edu.uchicago.cs.db.common.functional.IntIntConsumer;
+import edu.uchicago.cs.db.common.functional.IntObjectConsumer;
 import org.apache.parquet.bytes.BytesUtils;
 import org.apache.parquet.bytes.LittleEndianDataInputStream;
 import org.apache.parquet.column.Dictionary;
@@ -60,7 +63,7 @@ public class OnePassOrderPreservingDictionary {
         }
 
         @Override
-        public void nextPage() {
+        public void nextPage(boolean skip) {
             entrySize += pageSizes[pageIndex];
             if (pageSizes[pageIndex] > 0)
                 Arrays.sort(dictionaryContent, 0, entrySize);
@@ -89,6 +92,13 @@ public class OnePassOrderPreservingDictionary {
                     return mid; // key found
             }
             return -(low + 1);  // key not found.
+        }
+
+        @Override
+        public void access(IntObjectConsumer<Binary> consumer) {
+            for (int i = 0; i < entrySize; i++) {
+                consumer.consume(i, dictionaryContent[i]);
+            }
         }
     }
 
@@ -130,7 +140,7 @@ public class OnePassOrderPreservingDictionary {
         }
 
         @Override
-        public void nextPage() {
+        public void nextPage(boolean skip) {
             entrySize += pageSizes[pageIndex];
             if (pageSizes[pageIndex] > 0)
                 Arrays.sort(dictionaryContent, 0, entrySize);
@@ -159,6 +169,13 @@ public class OnePassOrderPreservingDictionary {
                     return mid; // key found
             }
             return -(low + 1);  // key not found.
+        }
+
+        @Override
+        public void access(IntIntConsumer consumer) {
+            for (int i = 0; i < entrySize; i++) {
+                consumer.consume(i, dictionaryContent[i]);
+            }
         }
     }
 
@@ -195,7 +212,7 @@ public class OnePassOrderPreservingDictionary {
         }
 
         @Override
-        public void nextPage() {
+        public void nextPage(boolean skip) {
             entrySize += pageSizes[pageIndex];
             if (pageSizes[pageIndex] > 0)
                 Arrays.sort(dictionaryContent, 0, entrySize);
@@ -224,6 +241,13 @@ public class OnePassOrderPreservingDictionary {
                     return mid; // key found
             }
             return -(low + 1);  // key not found.
+        }
+
+        @Override
+        public void access(IntDoubleConsumer consumer) {
+            for (int i = 0; i < entrySize; i++) {
+                consumer.consume(i, dictionaryContent[i]);
+            }
         }
     }
 }

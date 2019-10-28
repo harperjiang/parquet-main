@@ -18,6 +18,9 @@
  */
 package org.apache.parquet.column.values.dictionary;
 
+import edu.uchicago.cs.db.common.functional.IntDoubleConsumer;
+import edu.uchicago.cs.db.common.functional.IntIntConsumer;
+import edu.uchicago.cs.db.common.functional.IntObjectConsumer;
 import org.apache.parquet.Preconditions;
 import org.apache.parquet.column.Dictionary;
 import org.apache.parquet.column.page.DictionaryPage;
@@ -140,6 +143,13 @@ public abstract class PlainValuesDictionary extends Dictionary {
         }
 
         @Override
+        public void access(IntObjectConsumer<Binary> consumer) {
+            for (int i = 0; i < binaryDictionaryContent.length; i++) {
+                consumer.consume(i, binaryDictionaryContent[i]);
+            }
+        }
+
+        @Override
         public String toString() {
             StringBuilder sb = new StringBuilder("PlainBinaryDictionary {\n");
             for (int i = 0; i < binaryDictionaryContent.length; i++) {
@@ -227,6 +237,32 @@ public abstract class PlainValuesDictionary extends Dictionary {
         }
 
         @Override
+        public int encodeDouble(double value) {
+            int low = 0;
+            int high = getMaxId();
+
+            while (low <= high) {
+                int mid = (low + high) >>> 1;
+                double midVal = doubleDictionaryContent[mid];
+
+                if (midVal < value)
+                    low = mid + 1;
+                else if (midVal > value)
+                    high = mid - 1;
+                else
+                    return mid; // key found
+            }
+            return -(low + 1);  // key not found.
+        }
+
+        @Override
+        public void access(IntDoubleConsumer consumer) {
+            for (int i = 0; i < doubleDictionaryContent.length; i++) {
+                consumer.consume(i, doubleDictionaryContent[i]);
+            }
+        }
+
+        @Override
         public String toString() {
             StringBuilder sb = new StringBuilder("PlainDoubleDictionary {\n");
             for (int i = 0; i < doubleDictionaryContent.length; i++) {
@@ -286,6 +322,13 @@ public abstract class PlainValuesDictionary extends Dictionary {
                     return mid; // key found
             }
             return -(low + 1);  // key not found.
+        }
+
+        @Override
+        public void access(IntIntConsumer consumer) {
+            for (int i = 0; i < intDictionaryContent.length; i++) {
+                consumer.consume(i, intDictionaryContent[i]);
+            }
         }
 
         @Override

@@ -49,7 +49,7 @@ class OnePassOrderPreservingDictionaryValuesWriterTest {
         assertEquals(0, bdict.entrySize);
 
         for (int pi = 0; pi < 5; pi++) {
-            bdict.nextPage();
+            bdict.nextPage(true);
             assertEquals(200 * (pi + 1), bdict.entrySize);
             InputStream in = pages[pi].toInputStream();
             int bitWidth = BytesUtils.readIntLittleEndianOnOneByte(in);

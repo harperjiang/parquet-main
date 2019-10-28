@@ -18,7 +18,16 @@
  */
 package org.apache.parquet.column;
 
+import edu.uchicago.cs.db.common.functional.IntDoubleConsumer;
+import edu.uchicago.cs.db.common.functional.IntIntConsumer;
+import edu.uchicago.cs.db.common.functional.IntObjectConsumer;
+import it.unimi.dsi.fastutil.ints.IntArrayList;
+import it.unimi.dsi.fastutil.ints.IntList;
 import org.apache.parquet.io.api.Binary;
+
+import java.util.function.DoublePredicate;
+import java.util.function.IntPredicate;
+import java.util.function.Predicate;
 
 /**
  * a dictionary to decode dictionary based encodings
@@ -40,7 +49,7 @@ public abstract class Dictionary {
     /**
      * To support page based dictionary
      */
-    public void nextPage() {
+    public void nextPage(boolean skip) {
     }
 
     public abstract int getMaxId();
@@ -53,7 +62,9 @@ public abstract class Dictionary {
         throw new UnsupportedOperationException();
     }
 
-    public int encodeDouble(double value) {throw new UnsupportedOperationException();}
+    public int encodeDouble(double value) {
+        throw new UnsupportedOperationException();
+    }
 
     public Binary decodeToBinary(int id) {
         throw new UnsupportedOperationException(this.getClass().getName());
@@ -77,5 +88,44 @@ public abstract class Dictionary {
 
     public boolean decodeToBoolean(int id) {
         throw new UnsupportedOperationException(this.getClass().getName());
+    }
+
+    public void access(IntObjectConsumer<Binary> consumer) {
+        throw new UnsupportedOperationException();
+    }
+
+    public void access(IntDoubleConsumer consumer) {
+        throw new UnsupportedOperationException();
+    }
+
+    public void access(IntIntConsumer consumer) {
+        throw new UnsupportedOperationException();
+    }
+
+    public IntList filterInt(IntPredicate pred) {
+        IntList result = new IntArrayList();
+        access((int index, int value) -> {
+            if (pred.test(value))
+                result.add(index);
+        });
+        return result;
+    }
+
+    public IntList filterDouble(DoublePredicate pred) {
+        IntList result = new IntArrayList();
+        access((int index, double value) -> {
+            if (pred.test(value))
+                result.add(index);
+        });
+        return result;
+    }
+
+    public IntList filterBinary(Predicate<Binary> pred) {
+        IntList result = new IntArrayList();
+        access((int index, Binary value) -> {
+            if (pred.test(value))
+                result.add(index);
+        });
+        return result;
     }
 }

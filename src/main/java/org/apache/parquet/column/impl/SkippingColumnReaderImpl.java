@@ -742,19 +742,19 @@ public class SkippingColumnReaderImpl implements ColumnReader {
 
         // First use the toSkip to consume pages
         DataPage page = pageReader.readPage();
-        dictionary.nextPage();
 
         while (page != null && toSkip >= page.getValueCount()) {
+            dictionary.nextPage(true);
             this.readValues += page.getValueCount();
             this.validValues = this.readValues;
             this.readDatas = this.readValues;
             this.endOfPageValueCount += page.getValueCount();
             toSkip -= page.getValueCount();
             page = pageReader.readPage();
-            dictionary.nextPage();
         }
         // Check pageFilter for next valid page
         while (page != null && !page.accept(acceptPage)) {
+            dictionary.nextPage(true);
             // Need recompute
             toSkip = -1;
             this.readValues += page.getValueCount();
@@ -762,7 +762,6 @@ public class SkippingColumnReaderImpl implements ColumnReader {
             this.readDatas = this.readValues;
             this.endOfPageValueCount += page.getValueCount();
             page = pageReader.readPage();
-            dictionary.nextPage();
         }
 
         if (isFullyConsumed()) {
@@ -773,6 +772,7 @@ public class SkippingColumnReaderImpl implements ColumnReader {
             return;
         }
 
+        dictionary.nextPage(false);
         this.endOfPageValueCount += page.getValueCount();
 
         page.accept(new DataPage.Visitor<Void>() {
