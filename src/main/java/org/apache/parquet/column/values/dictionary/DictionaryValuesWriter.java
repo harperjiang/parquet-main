@@ -94,11 +94,6 @@ public abstract class DictionaryValuesWriter extends ValuesWriter implements Req
     /* dictionary encoded values */
     protected IntList encodedValues = new IntList();
 
-    /**
-     * indicates if this is the first page being processed
-     */
-    protected boolean firstPage = true;
-
     protected ByteBufferAllocator allocator;
     /* Track the list of writers used so they can be appropriately closed when necessary
        (currently used for off-heap memory which is not garbage collected) */
