@@ -1,9 +1,11 @@
 package org.apache.parquet.column.page;
 
 import org.apache.parquet.bytes.BytesInput;
+import org.apache.parquet.bytes.DirectByteBufferAllocator;
 import org.apache.parquet.io.ParquetEncodingException;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 
 import static org.apache.parquet.hadoop.CodecFactory.BytesDecompressor;
 
@@ -29,7 +31,11 @@ public class CompressedDataPageV1 extends DataPageV1 {
     public BytesInput getBytes() {
         try {
             if (compressed) {
-                compressedData = this.decompressor.decompress(compressedData, getUncompressedSize());
+                // Decompress to DirectByteBuffer
+                ByteBuffer directBuffer = new DirectByteBufferAllocator().allocate(this.getUncompressedSize());
+                this.decompressor.decompress(this.compressedData.toByteBuffer(), getCompressedSize(),
+                        directBuffer, getUncompressedSize());
+                compressedData = BytesInput.from(directBuffer, 0, getUncompressedSize());
                 compressed = false;
             }
             return compressedData;
