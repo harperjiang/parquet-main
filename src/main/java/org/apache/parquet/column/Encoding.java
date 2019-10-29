@@ -235,15 +235,13 @@ public enum Encoding {
                 case BINARY:
                     return new OnePassOrderPreservingDictionary.BinaryDictionary(dictionaryPage);
                 case DOUBLE:
-                    return new PlainDoubleDictionary(dictionaryPage);
+                    return new OnePassOrderPreservingDictionary.DoubleDictionary(dictionaryPage);
                 case INT32:
-                    return new PlainIntegerDictionary(dictionaryPage);
+                    return new OnePassOrderPreservingDictionary.IntegerDictionary(dictionaryPage);
                 default:
                     throw new ParquetDecodingException("Dictionary encoding not supported for type: " + descriptor.getType());
             }
         }
-
-
     };
 
     int getMaxLevel(ColumnDescriptor descriptor, ValuesType valuesType) {
