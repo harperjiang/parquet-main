@@ -47,9 +47,11 @@ public abstract class Dictionary {
     }
 
     /**
-     * To support page based dictionary
+     * @param skip true if the next page data is not needed. E.g., page is skipped
+     * @return true if there is new dictionary entry in the page
      */
-    public void nextPage(boolean skip) {
+    public boolean nextPage(boolean skip) {
+        return false;
     }
 
     public abstract int getMaxId();

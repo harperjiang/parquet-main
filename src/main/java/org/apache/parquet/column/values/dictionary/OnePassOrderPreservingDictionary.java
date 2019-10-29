@@ -63,11 +63,14 @@ public class OnePassOrderPreservingDictionary {
         }
 
         @Override
-        public void nextPage(boolean skip) {
-            entrySize += pageSizes[pageIndex];
-            if (pageSizes[pageIndex] > 0)
+        public boolean nextPage(boolean skip) {
+            int pageCount = pageSizes[pageIndex++];
+            entrySize += pageCount;
+            if (pageCount > 0) {
                 Arrays.sort(dictionaryContent, 0, entrySize);
-            pageIndex++;
+                return true;
+            }
+            return false;
         }
 
         @Override
@@ -140,11 +143,14 @@ public class OnePassOrderPreservingDictionary {
         }
 
         @Override
-        public void nextPage(boolean skip) {
-            entrySize += pageSizes[pageIndex];
-            if (pageSizes[pageIndex] > 0)
+        public boolean nextPage(boolean skip) {
+            int pageCount = pageSizes[pageIndex++];
+            entrySize += pageCount;
+            if (pageCount > 0) {
                 Arrays.sort(dictionaryContent, 0, entrySize);
-            pageIndex++;
+                return true;
+            }
+            return false;
         }
 
         @Override
@@ -212,11 +218,14 @@ public class OnePassOrderPreservingDictionary {
         }
 
         @Override
-        public void nextPage(boolean skip) {
-            entrySize += pageSizes[pageIndex];
-            if (pageSizes[pageIndex] > 0)
+        public boolean nextPage(boolean skip) {
+            int pageCount = pageSizes[pageIndex++];
+            entrySize += pageCount;
+            if (pageCount > 0) {
                 Arrays.sort(dictionaryContent, 0, entrySize);
-            pageIndex++;
+                return true;
+            }
+            return false;
         }
 
         @Override

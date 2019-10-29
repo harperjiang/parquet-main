@@ -55,7 +55,7 @@ class OnePassOrderPreservingDictionaryTest {
         assertEquals(49, dict.getMaxId());
 
         Arrays.sort(values, 0, 40);
-        dict.nextPage(true);
+        assertTrue(dict.nextPage(true));
         for (int i = 0; i < 40; i++) {
             assertEquals(values[i], dict.decodeToBinary(i).toStringUsingUTF8());
         }
@@ -63,7 +63,7 @@ class OnePassOrderPreservingDictionaryTest {
             assertEquals(i, dict.encodeBinary(Binary.fromString(values[i])));
         }
 
-        dict.nextPage(true);
+        assertFalse(dict.nextPage(true));
         for (int i = 0; i < 40; i++) {
             assertEquals(values[i], dict.decodeToBinary(i).toStringUsingUTF8());
         }
@@ -71,7 +71,7 @@ class OnePassOrderPreservingDictionaryTest {
             assertEquals(i, dict.encodeBinary(Binary.fromString(values[i])));
         }
 
-        dict.nextPage(true);
+        assertTrue(dict.nextPage(true));
         Arrays.sort(values, 0, 48);
         for (int i = 0; i < 48; i++) {
             assertEquals(values[i], dict.decodeToBinary(i).toStringUsingUTF8());
@@ -80,7 +80,7 @@ class OnePassOrderPreservingDictionaryTest {
             assertEquals(i, dict.encodeBinary(Binary.fromString(values[i])));
         }
 
-        dict.nextPage(true);
+        assertTrue(dict.nextPage(true));
         Arrays.sort(values, 0, 50);
         for (int i = 0; i < 50; i++) {
             assertEquals(values[i], dict.decodeToBinary(i).toStringUsingUTF8());
@@ -133,7 +133,7 @@ class OnePassOrderPreservingDictionaryTest {
         assertEquals(49, dict.getMaxId());
 
         Arrays.sort(values, 0, 40);
-        dict.nextPage(true);
+        assertTrue(dict.nextPage(true));
         for (int i = 0; i < 40; i++) {
             assertEquals(values[i], dict.decodeToInt(i));
         }
@@ -141,7 +141,7 @@ class OnePassOrderPreservingDictionaryTest {
             assertEquals(i, dict.encodeInt(values[i]));
         }
 
-        dict.nextPage(true);
+        assertFalse(dict.nextPage(true));
         for (int i = 0; i < 40; i++) {
             assertEquals(values[i], dict.decodeToInt(i), 0.0001);
         }
@@ -149,7 +149,7 @@ class OnePassOrderPreservingDictionaryTest {
             assertEquals(i, dict.encodeInt(values[i]));
         }
 
-        dict.nextPage(true);
+        assertTrue(dict.nextPage(true));
         Arrays.sort(values, 0, 48);
         for (int i = 0; i < 48; i++) {
             assertEquals(values[i], dict.decodeToInt(i), 0.0001);
@@ -158,7 +158,7 @@ class OnePassOrderPreservingDictionaryTest {
             assertEquals(i, dict.encodeInt(values[i]));
         }
 
-        dict.nextPage(true);
+        assertTrue(dict.nextPage(true));
         Arrays.sort(values, 0, 50);
         for (int i = 0; i < 50; i++) {
             assertEquals(values[i], dict.decodeToInt(i), 0.0001);
@@ -210,7 +210,7 @@ class OnePassOrderPreservingDictionaryTest {
         assertEquals(49, dict.getMaxId());
 
         Arrays.sort(values, 0, 40);
-        dict.nextPage(true);
+        assertTrue(dict.nextPage(true));
         for (int i = 0; i < 40; i++) {
             assertEquals(values[i], dict.decodeToDouble(i));
         }
@@ -218,7 +218,7 @@ class OnePassOrderPreservingDictionaryTest {
             assertEquals(i, dict.encodeDouble(values[i]));
         }
 
-        dict.nextPage(true);
+        assertFalse(dict.nextPage(true));
         for (int i = 0; i < 40; i++) {
             assertEquals(values[i], dict.decodeToDouble(i));
         }
@@ -226,7 +226,7 @@ class OnePassOrderPreservingDictionaryTest {
             assertEquals(i, dict.encodeDouble(values[i]));
         }
 
-        dict.nextPage(true);
+        assertTrue(dict.nextPage(true));
         Arrays.sort(values, 0, 48);
         for (int i = 0; i < 48; i++) {
             assertEquals(values[i], dict.decodeToDouble(i));
@@ -235,7 +235,7 @@ class OnePassOrderPreservingDictionaryTest {
             assertEquals(i, dict.encodeDouble(values[i]));
         }
 
-        dict.nextPage(true);
+        assertTrue(dict.nextPage(true));
         Arrays.sort(values, 0, 50);
         for (int i = 0; i < 50; i++) {
             assertEquals(values[i], dict.decodeToDouble(i));
