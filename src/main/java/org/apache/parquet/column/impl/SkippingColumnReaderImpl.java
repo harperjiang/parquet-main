@@ -23,6 +23,7 @@ package org.apache.parquet.column.impl;
 
 //import edu.uchicago.cs.encsel.parquet.EncContext;
 
+import com.google.common.base.Predicates;
 import org.apache.parquet.CorruptDeltaByteArrays;
 import org.apache.parquet.VersionParser.ParsedVersion;
 import org.apache.parquet.bytes.BytesInput;
@@ -424,6 +425,8 @@ public class SkippingColumnReaderImpl implements ColumnReader {
         });
     }
 
+    static final Predicate<Statistics<?>> TRUE = statistics -> true;
+
     public SkippingColumnReaderImpl(ColumnDescriptor path, PageReader pageReader, PrimitiveConverter converter,
                                     ParsedVersion writerVersion, Predicate<Statistics<?>> pageFilter, ForwardIterator rowFilter) {
         this.path = checkNotNull(path, "path");
@@ -452,6 +455,9 @@ public class SkippingColumnReaderImpl implements ColumnReader {
         if (totalValueCount <= 0) {
             throw new ParquetDecodingException("totalValueCount '" + totalValueCount + "' <= 0");
         }
+        if (this.pageFilter == null) {
+            this.pageFilter = TRUE;
+        }
         if (this.rowFilter == null) {
             this.rowFilter = new FullForwardIterator(totalValueCount);
         }
@@ -466,7 +472,7 @@ public class SkippingColumnReaderImpl implements ColumnReader {
      */
     public SkippingColumnReaderImpl(ColumnDescriptor path, PageReader pageReader, PrimitiveConverter converter,
                                     ParsedVersion writerVersion) {
-        this(path, pageReader, converter, writerVersion, stat -> true, null);
+        this(path, pageReader, converter, writerVersion, null, null);
     }
 
     public Dictionary getDictionary() {
@@ -656,8 +662,8 @@ public class SkippingColumnReaderImpl implements ColumnReader {
         long numValid = numSkip;
         if (this.optionalMode) {
             numValid = definitionLevelColumn.skipWithCount(numSkip);
-        } else {
-            definitionLevelColumn.skip(numSkip);
+//        } else {
+//            definitionLevelColumn.skip(numSkip);
         }
         readValues += numSkip;
         validValues += numValid;
@@ -921,7 +927,7 @@ public class SkippingColumnReaderImpl implements ColumnReader {
         if (0 == numConsume) {
             return;
         }
-        long numValid = skipDefinitionAndRepetitionLevels(numConsume - 1);
+        skipDefinitionAndRepetitionLevels(numConsume - 1);
 
         if (validValues > readDatas) {
             binding.skip(validValues - readDatas);
