@@ -20,10 +20,22 @@
  *     Hao Jiang - initial API and implementation
  */
 
-package edu.uchicago.cs.db.common.functional;
+package edu.uchicago.cs.db.parquet;
 
-@FunctionalInterface
-public interface IntIntConsumer {
+import org.junit.jupiter.api.Test;
 
-    public void consume(int index, int value);
+import static org.junit.jupiter.api.Assertions.*;
+
+class CharSequenceWriteSupportTest {
+
+    @Test
+    void parseInt() {
+        assertEquals(1414, CharSequenceWriteSupport.parseInt("1414"));
+    }
+
+    @Test
+    void parseHexInt() {
+        assertEquals(0x3248A, CharSequenceWriteSupport.parseHexInt("3248A"));
+        assertEquals(0x3248A, CharSequenceWriteSupport.parseHexInt("3248a"));
+    }
 }
